@@ -4,18 +4,32 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState("weekly");
 
   return (
-    <div style={{ padding: 16, fontFamily: "Inter, system-ui, sans-serif" }}>
+    <div style={{ padding: 24, fontFamily: "Inter, system-ui, sans-serif" }}>
       <h1 style={{ marginBottom: 16 }}>Fantasy Football — All-Play Standings</h1>
       <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
         <button
           onClick={() => setActiveTab("weekly")}
-          className={`tab-btn ${activeTab === "weekly" ? "active" : ""}`}
+          style={{
+            padding: "8px 16px",
+            fontWeight: 600,
+            borderRadius: 8,
+            border: "1px solid #ccc",
+            background: activeTab === "weekly" ? "#111827" : "#f3f4f6",
+            color: activeTab === "weekly" ? "#fff" : "#111827",
+          }}
         >
           Weekly
         </button>
         <button
           onClick={() => setActiveTab("season")}
-          className={`tab-btn ${activeTab === "season" ? "active" : ""}`}
+          style={{
+            padding: "8px 16px",
+            fontWeight: 600,
+            borderRadius: 8,
+            border: "1px solid #ccc",
+            background: activeTab === "season" ? "#111827" : "#f3f4f6",
+            color: activeTab === "season" ? "#fff" : "#111827",
+          }}
         >
           Season
         </button>
@@ -82,15 +96,23 @@ function WeeklyView() {
   return (
     <section>
       <div style={{ marginBottom: 12 }}>
-        <label htmlFor="week" style={{ marginRight: 8, fontWeight: 600 }}>Week</label>
+        <label htmlFor="week" style={{ marginRight: 8, fontWeight: 600 }}>
+          Week
+        </label>
         <select
           id="week"
           value={week}
           onChange={(e) => setWeek(Number(e.target.value))}
-          style={{ border: "1px solid #ddd", padding: "6px 8px", borderRadius: 6 }}
+          style={{
+            border: "1px solid #ddd",
+            padding: "6px 8px",
+            borderRadius: 6,
+          }}
         >
           {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
-            <option key={w} value={w}>Week {w}</option>
+            <option key={w} value={w}>
+              Week {w}
+            </option>
           ))}
         </select>
       </div>
@@ -112,7 +134,11 @@ function WeeklyView() {
             </thead>
             <tbody>
               {rows.length === 0 && (
-                <tr><td colSpan={6} style={{ padding: 12 }}>No scores found yet.</td></tr>
+                <tr>
+                  <td colSpan={6} style={{ padding: 12 }}>
+                    No scores found yet.
+                  </td>
+                </tr>
               )}
               {rows.map((t, idx) => {
                 const isOpen = openRoster === t.roster_id;
@@ -123,19 +149,36 @@ function WeeklyView() {
                       <td>{idx + 1}</td>
                       <td>
                         <div className="cell-team">
-                          {t.avatar && <img className="avatar" src={t.avatar} alt={t.custom_team_name || t.sleeper_display_name} />}
+                          {t.avatar && (
+                            <img
+                              className="avatar"
+                              src={t.avatar}
+                              alt={t.custom_team_name || t.sleeper_display_name}
+                            />
+                          )}
                           <div style={{ fontWeight: 600 }}>
-                            {t.custom_team_name || t.sleeper_display_name || `Roster ${t.roster_id}`}
+                            {t.custom_team_name ||
+                              t.sleeper_display_name ||
+                              `Roster ${t.roster_id}`}
                           </div>
                         </div>
                       </td>
                       <td>{t.manager_name || "—"}</td>
                       <td>{Number(t.points || 0).toFixed(1)}</td>
-                      <td>{t.wins}-{t.losses}</td>
+                      <td>
+                        {t.wins}-{t.losses}
+                      </td>
                       <td>
                         <button
-                          className="lineup-btn"
                           onClick={() => toggleRoster(t.roster_id)}
+                          style={{
+                            padding: "6px 10px",
+                            border: "1px solid #e5e7eb",
+                            borderRadius: 8,
+                            background: isOpen ? "#111827" : "#f3f4f6",
+                            color: isOpen ? "#fff" : "#111827",
+                            fontWeight: 600,
+                          }}
                         >
                           {isOpen ? "Hide lineup" : "View lineup"}
                         </button>
@@ -165,13 +208,21 @@ function WeeklyView() {
                                       <td>{i + 1}</td>
                                       <td>
                                         <div className="cell-team">
-                                          {p.headshot && <img className="headshot" src={p.headshot} alt={p.name} />}
+                                          {p.headshot && (
+                                            <img
+                                              className="headshot"
+                                              src={p.headshot}
+                                              alt={p.name}
+                                            />
+                                          )}
                                           <span style={{ fontWeight: 600 }}>{p.name}</span>
                                         </div>
                                       </td>
                                       <td>{p.pos || "—"}</td>
                                       <td>{p.team || "—"}</td>
-                                      <td style={{ textAlign: "right" }}>{p.points.toFixed(1)}</td>
+                                      <td style={{ textAlign: "right" }}>
+                                        {p.points.toFixed(1)}
+                                      </td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -235,30 +286,41 @@ function SeasonView() {
             </thead>
             <tbody>
               {season.length === 0 && (
-                <tr><td colSpan={6} style={{ padding: 12 }}>Season totals not available yet.</td></tr>
+                <tr>
+                  <td colSpan={6} style={{ padding: 12 }}>
+                    Season totals not available yet.
+                  </td>
+                </tr>
               )}
               {season
-                .sort((a, b) => b.totalWins - a.totalWins || b.totalPoints - a.totalPoints)
+                .sort(
+                  (a, b) =>
+                    b.totalWins - a.totalWins || b.totalPoints - a.totalPoints
+                )
                 .map((s, idx) => (
-                  <React.Fragment key={s.roster_id}>
-                    <tr>
-                      <td>{idx + 1}</td>
-                      <td>
-                        <div className="cell-team">
-                          {s.avatar && (
-                            <img className="avatar" src={s.avatar} alt={s.custom_team_name || s.sleeper_display_name} />
-                          )}
-                          <div style={{ fontWeight: 600 }}>
-                            {s.custom_team_name || s.sleeper_display_name || `Roster ${s.roster_id}`}
-                          </div>
+                  <tr key={s.roster_id}>
+                    <td>{idx + 1}</td>
+                    <td>
+                      <div className="cell-team">
+                        {s.avatar && (
+                          <img
+                            className="avatar"
+                            src={s.avatar}
+                            alt={s.custom_team_name || s.sleeper_display_name}
+                          />
+                        )}
+                        <div style={{ fontWeight: 600 }}>
+                          {s.custom_team_name ||
+                            s.sleeper_display_name ||
+                            `Roster ${s.roster_id}`}
                         </div>
-                      </td>
-                      <td>{s.manager_name || "—"}</td>
-                      <td>{s.totalWins}</td>
-                      <td>{s.totalLosses}</td>
-                      <td>{Number(s.totalPoints || 0).toFixed(1)}</td>
-                    </tr>
-                  </React.Fragment>
+                      </div>
+                    </td>
+                    <td>{s.manager_name || "—"}</td>
+                    <td>{s.totalWins}</td>
+                    <td>{s.totalLosses}</td>
+                    <td>{Number(s.totalPoints || 0).toFixed(1)}</td>
+                  </tr>
                 ))}
             </tbody>
           </table>
