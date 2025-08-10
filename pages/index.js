@@ -1,29 +1,41 @@
-// pages/index.js
-import { useEffect, useMemo, useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 
-function Tabs({ value, onChange }) {
+export default function Home() {
+  const [activeTab, setActiveTab] = useState("weekly");
+
   return (
-    <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-      {[
-        { key: "weekly", label: "Weekly Scores" },
-        { key: "season", label: "Season Standings" },
-      ].map((tab) => (
+    <div style={{ padding: 24, fontFamily: "Inter, system-ui, sans-serif" }}>
+      <h1 style={{ marginBottom: 16 }}>Fantasy Football — All-Play Standings</h1>
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
         <button
-          key={tab.key}
-          onClick={() => onChange(tab.key)}
+          onClick={() => setActiveTab("weekly")}
           style={{
-            flex: 1,
-            padding: "10px 12px",
-            borderRadius: 10,
-            border: "1px solid #e5e7eb",
-            background: value === tab.key ? "#111827" : "#f3f4f6",
-            color: value === tab.key ? "white" : "#111827",
+            padding: "8px 16px",
             fontWeight: 600,
+            borderRadius: 8,
+            border: "1px solid #ccc",
+            background: activeTab === "weekly" ? "#111827" : "#f3f4f6",
+            color: activeTab === "weekly" ? "#fff" : "#111827",
           }}
         >
-          {tab.label}
+          Weekly
         </button>
-      ))}
+        <button
+          onClick={() => setActiveTab("season")}
+          style={{
+            padding: "8px 16px",
+            fontWeight: 600,
+            borderRadius: 8,
+            border: "1px solid #ccc",
+            background: activeTab === "season" ? "#111827" : "#f3f4f6",
+            color: activeTab === "season" ? "#fff" : "#111827",
+          }}
+        >
+          Season
+        </button>
+      </div>
+
+      {activeTab === "weekly" ? <WeeklyView /> : <SeasonView />}
     </div>
   );
 }
@@ -32,8 +44,8 @@ function WeeklyView() {
   const [week, setWeek] = useState(1);
   const [scores, setScores] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [openRoster, setOpenRoster] = useState(null); // which roster is expanded
-  const [lineups, setLineups] = useState({}); // roster_id -> lineup payload
+  const [openRoster, setOpenRoster] = useState(null);
+  const [lineups, setLineups] = useState({});
   const LEAGUE_ID = process.env.NEXT_PUBLIC_SLEEPER_LEAGUE_ID || "";
 
   useEffect(() => {
@@ -52,13 +64,10 @@ function WeeklyView() {
       }
     };
     fetchScores();
-
-    // reset open lineup when week changes
     setOpenRoster(null);
     setLineups({});
   }, [week, LEAGUE_ID]);
 
-  // compute all-play for the week (no highlights)
   const rows = useMemo(() => {
     if (!scores.length) return [];
     const max = Math.max(...scores.map((s) => Number(s.points || 0)));
@@ -86,7 +95,6 @@ function WeeklyView() {
 
   return (
     <section>
-      {/* Week select */}
       <div style={{ marginBottom: 12 }}>
         <label htmlFor="week" style={{ marginRight: 8, fontWeight: 600 }}>Week</label>
         <select
@@ -156,7 +164,7 @@ function WeeklyView() {
                     </tr>
 
                     {isOpen && (
-                      <tr>
+                      <tr key={`${t.roster_id}-lineup`}>
                         <td colSpan={6} style={{ padding: 8, background: "#fafafa" }}>
                           {lineup.length === 0 ? (
                             <div>Loading lineup…</div>
@@ -215,7 +223,7 @@ function SeasonView() {
     const fetchSeason = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/scores?week=season`);
+        const res = await fetch(`/api/scores?week=season&maxWeek=14`);
         const data = await res.json();
         setSeason(Array.isArray(data) ? data : []);
       } catch (e) {
@@ -248,18 +256,10 @@ function SeasonView() {
             </thead>
             <tbody>
               {season.length === 0 && (
-                <tr>
-                  <td colSpan={6} style={{ padding: 12 }}>
-                    Season totals not available yet.
-                  </td>
-                </tr>
+                <tr><td colSpan={6} style={{ padding: 12 }}>Season totals not available yet.</td></tr>
               )}
               {season
-                .sort(
-                  (a, b) =>
-                    b.totalWins - a.totalWins ||
-                    b.totalPoints - a.totalPoints
-                )
+                .sort((a, b) => b.totalWins - a.totalWins || b.totalPoints - a.totalPoints)
                 .map((s, idx) => (
                   <React.Fragment key={s.roster_id}>
                     <tr>
@@ -267,19 +267,10 @@ function SeasonView() {
                       <td>
                         <div className="cell-team">
                           {s.avatar && (
-                            <img
-                              className="avatar"
-                              src={s.avatar}
-                              alt={
-                                s.custom_team_name ||
-                                s.sleeper_display_name
-                              }
-                            />
+                            <img className="avatar" src={s.avatar} alt={s.custom_team_name || s.sleeper_display_name} />
                           )}
                           <div style={{ fontWeight: 600 }}>
-                            {s.custom_team_name ||
-                              s.sleeper_display_name ||
-                              `Roster ${s.roster_id}`}
+                            {s.custom_team_name || s.sleeper_display_name || `Roster ${s.roster_id}`}
                           </div>
                         </div>
                       </td>
@@ -295,43 +286,5 @@ function SeasonView() {
         </div>
       )}
     </section>
-  );
-}
-
-export default function Home() {
-  const [tab, setTab] = useState("weekly");
-
-  // Sync tab with URL (?view=weekly|season) and remember last tab
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const initial = params.get("view");
-    const saved = localStorage.getItem("ff_view");
-    if (initial === "weekly" || initial === "season") {
-      setTab(initial);
-    } else if (saved === "weekly" || saved === "season") {
-      setTab(saved);
-    }
-  }, []);
-
-  useEffect(() => {
-    // update URL (shallow) + persist
-    const params = new URLSearchParams(window.location.search);
-    params.set("view", tab);
-    window.history.replaceState(null, "", `?${params.toString()}`);
-    localStorage.setItem("ff_view", tab);
-  }, [tab]);
-
-  return (
-    <main style={{ padding: 16, maxWidth: 960, margin: "0 auto", fontFamily: "Inter, system-ui, sans-serif" }}>
-      <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 12, lineHeight: 1.2 }}>
-        BSFFL — All-Play Dashboard
-      </h1>
-
-      <Tabs value={tab} onChange={setTab} />
-
-      {/* Lazy render SeasonView: mount only after selected once */}
-      {tab === "weekly" && <WeeklyView />}
-      {tab === "season" && <SeasonView />}
-    </main>
   );
 }
