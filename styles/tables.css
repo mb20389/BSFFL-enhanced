@@ -1,0 +1,59 @@
+/* styles/tables.css */
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: white;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 640px; /* keeps columns readable on narrow screens */
+  font-size: 14px;
+}
+
+.table thead th {
+  position: sticky;
+  top: 0;
+  background: #f9fafb;
+  z-index: 1;
+  text-align: left;
+  border-bottom: 2px solid #e5e7eb;
+  font-weight: 700;
+  padding: 10px;
+}
+
+.table tbody td {
+  padding: 10px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.table tbody tr:hover {
+  background: #fafafa;
+}
+
+.cell-team {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.headshot {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.badge-winner {
+  background: #e6ffed;
+}
