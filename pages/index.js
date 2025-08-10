@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import "./styles.css"; // We'll create this in a moment
+import "/styles/styles.css"; // We'll create this in a moment
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("weekly");
