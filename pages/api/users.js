@@ -1,9 +1,19 @@
+// pages/api/users.js
 import NodeCache from "node-cache";
 
 const cache = new NodeCache({ stdTTL: 43200 }); // 12 hours
-const LEAGUE_ID = process.env.SLEEPER_LEAGUE_ID || process.env.NEXT_PUBLIC_SLEEPER_LEAGUE_ID;
 
 export default async function handler(req, res) {
+  const { leagueId } = req.query;
+  const LEAGUE_ID =
+    leagueId ||
+    process.env.SLEEPER_LEAGUE_ID ||
+    process.env.NEXT_PUBLIC_SLEEPER_LEAGUE_ID;
+
+  if (!LEAGUE_ID) {
+    return res.status(400).json({ error: "Missing leagueId" });
+  }
+
   const cacheKey = `users-${LEAGUE_ID}`;
   const cached = cache.get(cacheKey);
   if (cached) return res.status(200).json(cached);
