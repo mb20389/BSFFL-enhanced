@@ -1,0 +1,66 @@
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 500px;
+}
+
+.table th, .table td {
+  padding: 8px;
+  border-bottom: 1px solid #eee;
+  text-align: left;
+}
+
+.avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.cell-team {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.headshot {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  margin-right: 6px;
+}
+
+.lineup-btn {
+  padding: 6px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-weight: 600;
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.tab-btn {
+  padding: 8px 16px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.tab-btn.active {
+  background: #111827;
+  color: #fff;
+}
+
+@media (max-width: 640px) {
+  .table th, .table td {
+    padding: 6px;
+    font-size: 0.85rem;
+  }
+}
