@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("weekly");
