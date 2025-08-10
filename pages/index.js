@@ -170,33 +170,43 @@ function WeeklyView() {
                       <tr key={`${t.roster_id}-lineup`}>
                         <td colSpan={6} style={{ padding: 8, background: "#fafafa" }}>
                           {lineup.length === 0 ? (
-                            <div>Loading lineup…</div>
-                          ) : (
-                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 8 }}>
-                              {lineup.map((p) => (
-                                <div key={p.id} style={{ border: "1px solid #eee", borderRadius: 8, padding: 8 }}>
-                                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                                    {p.headshot && (
-                                      <img
-                                        src={p.headshot}
-                                        alt={p.name}
-                                        style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover" }}
-                                      />
-                                    )}
-                                    <div>
-                                      <div style={{ fontWeight: 600, fontSize: 14 }}>{p.name}</div>
-                                      <div style={{ fontSize: 12, color: "#555" }}>
-                                        {p.pos}{p.team ? ` • ${p.team}` : ""}
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div style={{ marginTop: 6, fontSize: 14 }}>
-                                    Pts: <strong>{p.points.toFixed(1)}</strong>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+  <div>Loading lineup…</div>
+) : (
+  <div style={{ overflowX: "auto" }}>
+    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <thead>
+        <tr style={{ textAlign: "left", borderBottom: "2px solid #eee" }}>
+          <th style={{ padding: 8 }}>#</th>
+          <th style={{ padding: 8 }}>Player</th>
+          <th style={{ padding: 8 }}>Pos</th>
+          <th style={{ padding: 8 }}>Team</th>
+          <th style={{ padding: 8, textAlign: "right" }}>Points</th>
+        </tr>
+      </thead>
+      <tbody>
+        {lineup.map((p, i) => (
+          <tr key={p.id} style={{ borderBottom: "1px solid #f0f0f0" }}>
+            <td style={{ padding: 8 }}>{i + 1}</td>
+            <td style={{ padding: 8, display: "flex", alignItems: "center", gap: 8 }}>
+              {p.headshot && (
+                <img
+                  src={p.headshot}
+                  alt={p.name}
+                  style={{ width: 28, height: 28, borderRadius: 6, objectFit: "cover" }}
+                />
+              )}
+              <span style={{ fontWeight: 600 }}>{p.name}</span>
+            </td>
+            <td style={{ padding: 8 }}>{p.pos || "—"}</td>
+            <td style={{ padding: 8 }}>{p.team || "—"}</td>
+            <td style={{ padding: 8, textAlign: "right" }}>{p.points.toFixed(1)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+)}
+
                         </td>
                       </tr>
                     )}
