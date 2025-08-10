@@ -32,6 +32,8 @@ function WeeklyView() {
   const [week, setWeek] = useState(1);
   const [scores, setScores] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [openRoster, setOpenRoster] = useState(null); // which roster is expanded
+  const [lineups, setLineups] = useState({}); // roster_id -> lineup payload
   const LEAGUE_ID = process.env.NEXT_PUBLIC_SLEEPER_LEAGUE_ID || "";
 
   useEffect(() => {
@@ -50,8 +52,13 @@ function WeeklyView() {
       }
     };
     fetchScores();
+
+    // reset open lineup when week changes
+    setOpenRoster(null);
+    setLineups({});
   }, [week, LEAGUE_ID]);
 
+  // compute all-play for the week (no highlights)
   const rows = useMemo(() => {
     if (!scores.length) return [];
     const max = Math.max(...scores.map((s) => Number(s.points || 0)));
@@ -63,12 +70,25 @@ function WeeklyView() {
     });
   }, [scores]);
 
+  const toggleRoster = async (roster_id) => {
+    const willOpen = openRoster !== roster_id;
+    setOpenRoster(willOpen ? roster_id : null);
+    if (willOpen && !lineups[roster_id]) {
+      try {
+        const res = await fetch(`/api/lineup?week=${week}&rosterId=${roster_id}`);
+        const data = await res.json();
+        setLineups((m) => ({ ...m, [roster_id]: data }));
+      } catch (e) {
+        console.error("Failed to load lineup", e);
+      }
+    }
+  };
+
   return (
     <section>
+      {/* Week select */}
       <div style={{ marginBottom: 12 }}>
-        <label htmlFor="week" style={{ marginRight: 8, fontWeight: 600 }}>
-          Week
-        </label>
+        <label htmlFor="week" style={{ marginRight: 8, fontWeight: 600 }}>Week</label>
         <select
           id="week"
           value={week}
@@ -76,9 +96,7 @@ function WeeklyView() {
           style={{ border: "1px solid #ddd", padding: "6px 8px", borderRadius: 6 }}
         >
           {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
-            <option key={w} value={w}>
-              Week {w}
-            </option>
+            <option key={w} value={w}>Week {w}</option>
           ))}
         </select>
       </div>
@@ -94,45 +112,97 @@ function WeeklyView() {
                 <th style={{ padding: 8 }}>Team</th>
                 <th style={{ padding: 8 }}>Manager</th>
                 <th style={{ padding: 8 }}>Points</th>
-                <th style={{ padding: 8 }}>All-Play (W-L)</th>
+                <th style={{ padding: 8 }}>All-Play</th>
+                <th style={{ padding: 8 }}></th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 && (
-                <tr>
-                  <td colSpan={5} style={{ padding: 12 }}>
-                    No scores found yet.
-                  </td>
-                </tr>
+                <tr><td colSpan={6} style={{ padding: 12 }}>No scores found yet.</td></tr>
               )}
-              {rows.map((t, idx) => (
-                <tr
-                  key={t.roster_id}
-                  style={{
-                    borderBottom: "1px solid #f0f0f0",
-                    background: t.isWinner ? "#e6ffed" : "transparent",
-                  }}
-                >
-                  <td style={{ padding: 8 }}>{idx + 1}</td>
-                  <td style={{ padding: 8, display: "flex", alignItems: "center", gap: 8 }}>
-                    {t.avatar && (
-                      <img
-                        src={t.avatar}
-                        alt={t.custom_team_name || t.sleeper_display_name}
-                        style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover" }}
-                      />
+              {rows.map((t, idx) => {
+                const isOpen = openRoster === t.roster_id;
+                const lineup = lineups[t.roster_id]?.starters || [];
+                return (
+                  <>
+                    <tr
+                      key={t.roster_id}
+                      style={{
+                        borderBottom: "1px solid #f0f0f0",
+                        background: t.isWinner ? "#e6ffed" : "transparent",
+                      }}
+                    >
+                      <td style={{ padding: 8 }}>{idx + 1}</td>
+                      <td style={{ padding: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                        {t.avatar && (
+                          <img
+                            src={t.avatar}
+                            alt={t.custom_team_name || t.sleeper_display_name}
+                            style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover" }}
+                          />
+                        )}
+                        <div style={{ fontWeight: 600 }}>
+                          {t.custom_team_name || t.sleeper_display_name || `Roster ${t.roster_id}`}
+                        </div>
+                      </td>
+                      <td style={{ padding: 8 }}>{t.manager_name || "—"}</td>
+                      <td style={{ padding: 8 }}>{Number(t.points || 0).toFixed(1)}</td>
+                      <td style={{ padding: 8 }}>{t.wins}-{t.losses}</td>
+                      <td style={{ padding: 8 }}>
+                        <button
+                          onClick={() => toggleRoster(t.roster_id)}
+                          style={{
+                            padding: "6px 10px",
+                            border: "1px solid #e5e7eb",
+                            borderRadius: 8,
+                            background: isOpen ? "#111827" : "#f3f4f6",
+                            color: isOpen ? "#fff" : "#111827",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {isOpen ? "Hide lineup" : "View lineup"}
+                        </button>
+                      </td>
+                    </tr>
+
+                    {/* Expanded lineup row */}
+                    {isOpen && (
+                      <tr key={`${t.roster_id}-lineup`}>
+                        <td colSpan={6} style={{ padding: 8, background: "#fafafa" }}>
+                          {lineup.length === 0 ? (
+                            <div>Loading lineup…</div>
+                          ) : (
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 8 }}>
+                              {lineup.map((p) => (
+                                <div key={p.id} style={{ border: "1px solid #eee", borderRadius: 8, padding: 8 }}>
+                                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                    {p.headshot && (
+                                      <img
+                                        src={p.headshot}
+                                        alt={p.name}
+                                        style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover" }}
+                                      />
+                                    )}
+                                    <div>
+                                      <div style={{ fontWeight: 600, fontSize: 14 }}>{p.name}</div>
+                                      <div style={{ fontSize: 12, color: "#555" }}>
+                                        {p.pos}{p.team ? ` • ${p.team}` : ""}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div style={{ marginTop: 6, fontSize: 14 }}>
+                                    Pts: <strong>{p.points.toFixed(1)}</strong>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
                     )}
-                    <div style={{ fontWeight: 600 }}>
-                      {t.custom_team_name || t.sleeper_display_name || `Roster ${t.roster_id}`}
-                    </div>
-                  </td>
-                  <td style={{ padding: 8 }}>{t.manager_name || "—"}</td>
-                  <td style={{ padding: 8 }}>{Number(t.points || 0).toFixed(1)}</td>
-                  <td style={{ padding: 8 }}>
-                    {t.wins}-{t.losses}
-                  </td>
-                </tr>
-              ))}
+                  </>
+                );
+              })}
             </tbody>
           </table>
         </div>
