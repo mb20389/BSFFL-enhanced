@@ -1,51 +1,61 @@
 // pages/api/scores.js
-import fetch from "node-fetch";
+import NodeCache from "node-cache";
+
+const cache = new NodeCache({ stdTTL: 300 }); // 5 minutes
 
 export default async function handler(req, res) {
   const { leagueId, week } = req.query;
+  const LEAGUE_ID =
+    leagueId ||
+    process.env.SLEEPER_LEAGUE_ID ||
+    process.env.NEXT_PUBLIC_SLEEPER_LEAGUE_ID;
 
-  if (!leagueId || !week) {
+  if (!LEAGUE_ID || !week) {
     return res.status(400).json({ error: "Missing leagueId or week" });
   }
 
+  const cacheKey = `scores-${LEAGUE_ID}-${week}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return res.status(200).json(cached);
+
   try {
-    // 1️⃣ Get matchup scores for the given week
-    const matchupsRes = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/matchups/${week}`);
-    const matchups = await matchupsRes.json();
+    // Matchups / Users / Rosters
+    const [matchupsRes, usersRes, rostersRes] = await Promise.all([
+      fetch(`https://api.sleeper.app/v1/league/${LEAGUE_ID}/matchups/${week}`),
+      fetch(`https://api.sleeper.app/v1/league/${LEAGUE_ID}/users`),
+      fetch(`https://api.sleeper.app/v1/league/${LEAGUE_ID}/rosters`)
+    ]);
 
-    // 2️⃣ Get all users in the league (team info)
-    const usersRes = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/users`);
-    const users = await usersRes.json();
+    if (!matchupsRes.ok || !usersRes.ok || !rostersRes.ok) {
+      throw new Error("Sleeper API error");
+    }
 
-    // 3️⃣ Get all rosters (links owners to rosters)
-    const rostersRes = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`);
-    const rosters = await rostersRes.json();
+    const [matchups, users, rosters] = await Promise.all([
+      matchupsRes.json(),
+      usersRes.json(),
+      rostersRes.json()
+    ]);
 
-    // 4️⃣ Merge: Each score now has team info
-    const enriched = matchups.map(m => {
-      const roster = rosters.find(r => r.roster_id === m.roster_id);
-      const owner = users.find(u => u.user_id === roster?.owner_id);
-
+    // Merge team info into each score row
+    const enriched = (Array.isArray(matchups) ? matchups : []).map((m) => {
+      const roster = rosters.find((r) => r.roster_id === m.roster_id);
+      const owner = users.find((u) => u.user_id === roster?.owner_id);
       return {
         roster_id: m.roster_id,
-        points: m.points || 0,
+        points: Number(m.points || 0),
         sleeper_display_name: owner?.display_name || "Unknown",
         custom_team_name: owner?.metadata?.team_name || owner?.display_name || "Unnamed Team",
         manager_name:
           owner?.metadata?.team_nickname ||
           `${owner?.metadata?.first_name || ""} ${owner?.metadata?.last_name || ""}`.trim(),
-        avatar: owner?.avatar
-          ? `https://sleepercdn.com/avatars/${owner.avatar}`
-          : null
+        avatar: owner?.avatar ? `https://sleepercdn.com/avatars/${owner.avatar}` : null
       };
-    });
+    }).sort((a, b) => b.points - a.points);
 
-    // 5️⃣ Sort by points descending
-    enriched.sort((a, b) => b.points - a.points);
-
-    res.status(200).json(enriched);
+    cache.set(cacheKey, enriched);
+    return res.status(200).json(enriched);
   } catch (error) {
-    console.error("Error fetching scores:", error);
-    res.status(500).json({ error: "Failed to fetch scores" });
+    console.error("scores api error:", error);
+    return res.status(500).json({ error: "Failed to fetch scores" });
   }
 }
