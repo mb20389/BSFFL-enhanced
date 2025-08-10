@@ -1,35 +1,22 @@
 import React, { useState, useEffect, useMemo } from "react";
+import "./styles.css"; // We'll create this in a moment
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("weekly");
 
   return (
-    <div style={{ padding: 24, fontFamily: "Inter, system-ui, sans-serif" }}>
+    <div style={{ padding: 16, fontFamily: "Inter, system-ui, sans-serif" }}>
       <h1 style={{ marginBottom: 16 }}>Fantasy Football — All-Play Standings</h1>
       <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
         <button
           onClick={() => setActiveTab("weekly")}
-          style={{
-            padding: "8px 16px",
-            fontWeight: 600,
-            borderRadius: 8,
-            border: "1px solid #ccc",
-            background: activeTab === "weekly" ? "#111827" : "#f3f4f6",
-            color: activeTab === "weekly" ? "#fff" : "#111827",
-          }}
+          className={`tab-btn ${activeTab === "weekly" ? "active" : ""}`}
         >
           Weekly
         </button>
         <button
           onClick={() => setActiveTab("season")}
-          style={{
-            padding: "8px 16px",
-            fontWeight: 600,
-            borderRadius: 8,
-            border: "1px solid #ccc",
-            background: activeTab === "season" ? "#111827" : "#f3f4f6",
-            color: activeTab === "season" ? "#fff" : "#111827",
-          }}
+          className={`tab-btn ${activeTab === "season" ? "active" : ""}`}
         >
           Season
         </button>
@@ -148,15 +135,8 @@ function WeeklyView() {
                       <td>{t.wins}-{t.losses}</td>
                       <td>
                         <button
+                          className="lineup-btn"
                           onClick={() => toggleRoster(t.roster_id)}
-                          style={{
-                            padding: "6px 10px",
-                            border: "1px solid #e5e7eb",
-                            borderRadius: 8,
-                            background: isOpen ? "#111827" : "#f3f4f6",
-                            color: isOpen ? "#fff" : "#111827",
-                            fontWeight: 600,
-                          }}
                         >
                           {isOpen ? "Hide lineup" : "View lineup"}
                         </button>
