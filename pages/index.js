@@ -1,172 +1,270 @@
-import { useEffect, useState } from "react";
-
-const LEAGUE_ID = process.env.NEXT_PUBLIC_SLEEPER_LEAGUE_ID || "";
+import React, { useState, useEffect, useMemo } from "react";
+import "./styles.css"; // We'll create this in a moment
 
 export default function Home() {
-  const [week, setWeek] = useState(1);
-  const [maxWeeks] = useState(18); // adjust if needed
-  const [users, setUsers] = useState([]);
-  const [rosters, setRosters] = useState([]);
-  const [scores, setScores] = useState([]); // current week scores
-  const [season, setSeason] = useState([]); // cumulative season standings
-  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("weekly");
 
-  useEffect(() => {
-    async function loadBase() {
-      try {
-        const [usersRes, rostersRes] = await Promise.all([
-          fetch(`/api/users?leagueId=${LEAGUE_ID}`),
-          fetch(`/api/rosters?leagueId=${LEAGUE_ID}`),
-        ]);
-        const usersJson = await usersRes.json();
-        const rostersJson = await rostersRes.json();
-        setUsers(Array.isArray(usersJson) ? usersJson : []);
-        setRosters(Array.isArray(rostersJson) ? rostersJson : []);
-      } catch (err) {
-        console.error("Error loading league base data", err);
-      }
-    }
-    loadBase();
-  }, []);
+  return (
+    <div style={{ padding: 16, fontFamily: "Inter, system-ui, sans-serif" }}>
+      <h1 style={{ marginBottom: 16 }}>Fantasy Football — All-Play Standings</h1>
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        <button
+          onClick={() => setActiveTab("weekly")}
+          className={`tab-btn ${activeTab === "weekly" ? "active" : ""}`}
+        >
+          Weekly
+        </button>
+        <button
+          onClick={() => setActiveTab("season")}
+          className={`tab-btn ${activeTab === "season" ? "active" : ""}`}
+        >
+          Season
+        </button>
+      </div>
+
+      {activeTab === "weekly" ? <WeeklyView /> : <SeasonView />}
+    </div>
+  );
+}
+
+function WeeklyView() {
+  const [week, setWeek] = useState(1);
+  const [scores, setScores] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [openRoster, setOpenRoster] = useState(null);
+  const [lineups, setLineups] = useState({});
+  const LEAGUE_ID = process.env.NEXT_PUBLIC_SLEEPER_LEAGUE_ID || "";
 
   useEffect(() => {
     if (!LEAGUE_ID) return;
-    async function loadScoresAndSeason() {
+    const fetchScores = async () => {
       setLoading(true);
       try {
-        const [scoresRes, seasonRes] = await Promise.all([
-          fetch(`/api/scores?leagueId=${LEAGUE_ID}&week=${week}`),
-          fetch(`/api/scores?leagueId=${LEAGUE_ID}&week=season`),
-        ]);
-        const scoresJson = await scoresRes.json();
-        const seasonJson = await seasonRes.json();
-
-        setScores(Array.isArray(scoresJson) ? scoresJson : []);
-        setSeason(Array.isArray(seasonJson) ? seasonJson : []);
-      } catch (err) {
-        console.error("Error loading scores/season", err);
+        const res = await fetch(`/api/scores?week=${week}`);
+        const data = await res.json();
+        setScores(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.error("Failed to load scores", e);
+        setScores([]);
       } finally {
         setLoading(false);
       }
-    }
-    loadScoresAndSeason();
+    };
+    fetchScores();
+    setOpenRoster(null);
+    setLineups({});
   }, [week, LEAGUE_ID]);
 
-  // Helpers to find roster and user by roster_id
-  const getRosterById = (rid) => rosters.find((r) => String(r.roster_id) === String(rid));
-  const getUserByRosterId = (rid) => {
-    const r = getRosterById(rid);
-    if (!r) return null;
-    return users.find((u) => u.user_id === r.owner_id) || null;
-  };
+  const rows = useMemo(() => {
+    if (!scores.length) return [];
+    const max = Math.max(...scores.map((s) => Number(s.points || 0)));
+    return scores.map((t) => {
+      const pts = Number(t.points || 0);
+      const wins = scores.filter((o) => Number(o.points || 0) < pts).length;
+      const losses = scores.filter((o) => Number(o.points || 0) > pts).length;
+      return { ...t, wins, losses, isWinner: pts === max };
+    });
+  }, [scores]);
 
-  const getAvatarUrl = (user) => {
-    if (!user) return null;
-    return user.avatar ? `https://sleepercdn.com/avatars/thumbs/${user.avatar}` : null;
+  const toggleRoster = async (roster_id) => {
+    const willOpen = openRoster !== roster_id;
+    setOpenRoster(willOpen ? roster_id : null);
+    if (willOpen && !lineups[roster_id]) {
+      try {
+        const res = await fetch(`/api/lineup?week=${week}&rosterId=${roster_id}`);
+        const data = await res.json();
+        setLineups((m) => ({ ...m, [roster_id]: data }));
+      } catch (e) {
+        console.error("Failed to load lineup", e);
+      }
+    }
   };
-
-  const winnerRosterIds = (() => {
-    if (!scores || scores.length === 0) return [];
-    const maxScore = Math.max(...scores.map((s) => Number(s.points || 0)));
-    return scores.filter((s) => Number(s.points || 0) === maxScore).map((s) => String(s.roster_id));
-  })();
 
   return (
-    <div style={{ padding: 24, fontFamily: "Inter, system-ui, sans-serif" }}>
-      <h1 style={{ marginBottom: 12 }}>Fantasy Football — All-Play Standings</h1>
-
-      <div style={{ marginBottom: 16 }}>
-        <label style={{ marginRight: 8, fontWeight: 600 }}>Week</label>
-        <select value={week} onChange={(e) => setWeek(Number(e.target.value))}>
-          {Array.from({ length: maxWeeks }, (_, i) => i + 1).map((w) => (
+    <section>
+      <div style={{ marginBottom: 12 }}>
+        <label htmlFor="week" style={{ marginRight: 8, fontWeight: 600 }}>Week</label>
+        <select
+          id="week"
+          value={week}
+          onChange={(e) => setWeek(Number(e.target.value))}
+          style={{ border: "1px solid #ddd", padding: "6px 8px", borderRadius: 6 }}
+        >
+          {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
             <option key={w} value={w}>Week {w}</option>
           ))}
         </select>
       </div>
 
-      {loading && <div style={{ marginBottom: 12 }}>Loading data…</div>}
-
-      <h2>Week {week} Results</h2>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 20 }}>
-        <thead>
-          <tr style={{ textAlign: "left", borderBottom: "2px solid #eee" }}>
-            <th style={{ padding: 8 }}>Team</th>
-            <th style={{ padding: 8 }}>Manager</th>
-            <th style={{ padding: 8 }}>Score</th>
-            <th style={{ padding: 8 }}>All-Play W-L</th>
-          </tr>
-        </thead>
-        <tbody>
-          {scores.length === 0 && (
-            <tr><td colSpan="4" style={{ padding: 8 }}>No scores found for this week yet.</td></tr>
-          )}
-          {scores.map((row) => {
-            const roster = getRosterById(row.roster_id);
-            const user = getUserByRosterId(row.roster_id);
-            const avatar = getAvatarUrl(user);
-            const wins = scores.filter((s) => Number(s.points || 0) < Number(row.points || 0)).length;
-            const losses = scores.filter((s) => Number(s.points || 0) > Number(row.points || 0)).length;
-            const isWinner = winnerRosterIds.includes(String(row.roster_id));
-            return (
-              <tr key={row.roster_id} style={{ background: isWinner ? "#e6ffed" : "transparent", borderBottom: "1px solid #f0f0f0" }}>
-                <td style={{ padding: 8, display: "flex", alignItems: "center", gap: 8 }}>
-                  <img src={avatar || "/logos/default.png"} alt="" style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover" }} />
-                  <div>
-                    <div style={{ fontWeight: 600 }}>{roster?.settings?.team_name || `Roster ${row.roster_id}`}</div>
-                    <div style={{ fontSize: 12, color: "#666" }}>{roster?.metadata?.t?.division || ""}</div>
-                  </div>
-                </td>
-                <td style={{ padding: 8 }}>{user?.display_name || user?.username || "Unknown"}</td>
-                <td style={{ padding: 8 }}>{Number(row.points || 0).toFixed(1)}</td>
-                <td style={{ padding: 8 }}>{wins} - {losses}</td>
+      {loading ? (
+        <p>Loading scores…</p>
+      ) : (
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Team</th>
+                <th>Manager</th>
+                <th>Points</th>
+                <th>All-Play</th>
+                <th></th>
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
+            </thead>
+            <tbody>
+              {rows.length === 0 && (
+                <tr><td colSpan={6} style={{ padding: 12 }}>No scores found yet.</td></tr>
+              )}
+              {rows.map((t, idx) => {
+                const isOpen = openRoster === t.roster_id;
+                const lineup = lineups[t.roster_id]?.starters || [];
+                return (
+                  <React.Fragment key={t.roster_id}>
+                    <tr className={t.isWinner ? "badge-winner" : ""}>
+                      <td>{idx + 1}</td>
+                      <td>
+                        <div className="cell-team">
+                          {t.avatar && <img className="avatar" src={t.avatar} alt={t.custom_team_name || t.sleeper_display_name} />}
+                          <div style={{ fontWeight: 600 }}>
+                            {t.custom_team_name || t.sleeper_display_name || `Roster ${t.roster_id}`}
+                          </div>
+                        </div>
+                      </td>
+                      <td>{t.manager_name || "—"}</td>
+                      <td>{Number(t.points || 0).toFixed(1)}</td>
+                      <td>{t.wins}-{t.losses}</td>
+                      <td>
+                        <button
+                          className="lineup-btn"
+                          onClick={() => toggleRoster(t.roster_id)}
+                        >
+                          {isOpen ? "Hide lineup" : "View lineup"}
+                        </button>
+                      </td>
+                    </tr>
 
-      <h2>Season Standings (Cumulative All-Play)</h2>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr style={{ textAlign: "left", borderBottom: "2px solid #eee" }}>
-            <th style={{ padding: 8 }}>Team</th>
-            <th style={{ padding: 8 }}>Manager</th>
-            <th style={{ padding: 8 }}>Total Wins</th>
-            <th style={{ padding: 8 }}>Total Losses</th>
-            <th style={{ padding: 8 }}>Total Points</th>
-          </tr>
-        </thead>
-        <tbody>
-          {season.length === 0 && <tr><td colSpan="5" style={{ padding: 8 }}>Season totals not available yet.</td></tr>}
-          {season
-            .sort((a, b) => b.totalWins - a.totalWins || b.totalPoints - a.totalPoints)
-            .map((s) => {
-              const roster = getRosterById(s.roster_id);
-              const user = getUserByRosterId(s.roster_id);
-              const avatar = getAvatarUrl(user);
-              return (
-                <tr key={s.roster_id} style={{ borderBottom: "1px solid #f0f0f0" }}>
-                  <td style={{ padding: 8, display: "flex", alignItems: "center", gap: 8 }}>
-                    <img src={avatar || "/logos/default.png"} alt="" style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover" }} />
-                    <div>
-                      <div style={{ fontWeight: 600 }}>{roster?.settings?.team_name || `Roster ${s.roster_id}`}</div>
-                    </div>
-                  </td>
-                  <td style={{ padding: 8 }}>{user?.display_name || user?.username || "Unknown"}</td>
-                  <td style={{ padding: 8 }}>{s.totalWins}</td>
-                  <td style={{ padding: 8 }}>{s.totalLosses}</td>
-                  <td style={{ padding: 8 }}>{Number(s.totalPoints || 0).toFixed(1)}</td>
-                </tr>
-              );
-            })}
-        </tbody>
-      </table>
+                    {isOpen && (
+                      <tr key={`${t.roster_id}-lineup`}>
+                        <td colSpan={6} style={{ padding: 8, background: "#fafafa" }}>
+                          {lineup.length === 0 ? (
+                            <div>Loading lineup…</div>
+                          ) : (
+                            <div className="table-wrap">
+                              <table className="table">
+                                <thead>
+                                  <tr>
+                                    <th>#</th>
+                                    <th>Player</th>
+                                    <th>Pos</th>
+                                    <th>Team</th>
+                                    <th style={{ textAlign: "right" }}>Points</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {lineup.map((p, i) => (
+                                    <tr key={p.id}>
+                                      <td>{i + 1}</td>
+                                      <td>
+                                        <div className="cell-team">
+                                          {p.headshot && <img className="headshot" src={p.headshot} alt={p.name} />}
+                                          <span style={{ fontWeight: 600 }}>{p.name}</span>
+                                        </div>
+                                      </td>
+                                      <td>{p.pos || "—"}</td>
+                                      <td>{p.team || "—"}</td>
+                                      <td style={{ textAlign: "right" }}>{p.points.toFixed(1)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
 
-      <div style={{ marginTop: 20 }}>
-        <small style={{ color: "#666" }}>
-          Data is pulled live from Sleeper. If you see stale data, try refreshing the page or wait a few minutes (API responses are cached server-side).
-        </small>
-      </div>
-    </div>
+function SeasonView() {
+  const [season, setSeason] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const LEAGUE_ID = process.env.NEXT_PUBLIC_SLEEPER_LEAGUE_ID || "";
+
+  useEffect(() => {
+    if (!LEAGUE_ID) return;
+    const fetchSeason = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/scores?week=season&maxWeek=14`);
+        const data = await res.json();
+        setSeason(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.error("Failed to load season standings", e);
+        setSeason([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchSeason();
+  }, [LEAGUE_ID]);
+
+  return (
+    <section>
+      <h2>Season Standings (Weeks 1–14)</h2>
+      {loading ? (
+        <p>Loading standings…</p>
+      ) : (
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Team</th>
+                <th>Manager</th>
+                <th>Total Wins</th>
+                <th>Total Losses</th>
+                <th>Total Points</th>
+              </tr>
+            </thead>
+            <tbody>
+              {season.length === 0 && (
+                <tr><td colSpan={6} style={{ padding: 12 }}>Season totals not available yet.</td></tr>
+              )}
+              {season
+                .sort((a, b) => b.totalWins - a.totalWins || b.totalPoints - a.totalPoints)
+                .map((s, idx) => (
+                  <React.Fragment key={s.roster_id}>
+                    <tr>
+                      <td>{idx + 1}</td>
+                      <td>
+                        <div className="cell-team">
+                          {s.avatar && (
+                            <img className="avatar" src={s.avatar} alt={s.custom_team_name || s.sleeper_display_name} />
+                          )}
+                          <div style={{ fontWeight: 600 }}>
+                            {s.custom_team_name || s.sleeper_display_name || `Roster ${s.roster_id}`}
+                          </div>
+                        </div>
+                      </td>
+                      <td>{s.manager_name || "—"}</td>
+                      <td>{s.totalWins}</td>
+                      <td>{s.totalLosses}</td>
+                      <td>{Number(s.totalPoints || 0).toFixed(1)}</td>
+                    </tr>
+                  </React.Fragment>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
