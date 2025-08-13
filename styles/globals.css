@@ -47,3 +47,11 @@
 .badge-winner {
   background-color: #e6ffed;
 }
+
+/* already have .badge-winner (light green) — add lowest score highlight */
+.badge-lowest {
+  background-color: #ffecec; /* light red */
+}
+
+
+
