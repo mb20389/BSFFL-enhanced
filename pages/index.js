@@ -44,8 +44,16 @@ function WeeklyView() {
   const [lineups, setLineups] = useState({}); // roster_id -> lineup payload
   const [lastUpdated, setLastUpdated] = useState(null);
 
+  // sorting
+  const [sortKey, setSortKey] = useState(null); // 'proj' | 'points' | null
+  const [sortDir, setSortDir] = useState("desc"); // 'asc' | 'desc'
+
   // per-roster fetch timestamps for throttle
   const lineupFetchedAtRef = useRef({}); // { [roster_id]: timestamp }
+
+  // keep the last projections to compute deltas (up/down)
+  const prevProjectionsRef = useRef({}); // { [roster_id]: projected_points }
+  const [projDeltas, setProjDeltas] = useState({}); // { [roster_id]: delta }
 
   const controllerRef = useRef(null);
   const intervalRef = useRef(null);
@@ -74,18 +82,31 @@ function WeeklyView() {
 
       setScores(Array.isArray(scoresJson) ? scoresJson : []);
 
-      const projMap = {};
+      // projections mapping
+      const nextProj = {};
       (Array.isArray(projJson) ? projJson : []).forEach((p) => {
-        projMap[String(p.roster_id)] = Number(p.projected_points || 0);
+        nextProj[String(p.roster_id)] = Number(p.projected_points || 0);
       });
-      setProjections(projMap);
 
+      // compute deltas vs previous
+      const prev = prevProjectionsRef.current || {};
+      const deltas = {};
+      Object.keys(nextProj).forEach((rid) => {
+        const before = Number(prev[rid] ?? nextProj[rid]);
+        const after = Number(nextProj[rid]);
+        deltas[rid] = after - before;
+      });
+      setProjDeltas(deltas);
+      prevProjectionsRef.current = nextProj;
+
+      setProjections(nextProj);
       setLastUpdated(new Date());
     } catch (e) {
       if (e.name !== "AbortError") {
         console.error("Failed to load weekly data", e);
         setScores([]);
         setProjections({});
+        setProjDeltas({});
       }
     } finally {
       setLoading(false);
@@ -98,6 +119,9 @@ function WeeklyView() {
     fetchWeekly(week);
     setOpenRoster(null);
     setLineups({});
+    // reset sorting when week changes (optional)
+    setSortKey(null);
+    setSortDir("desc");
   }, [week, LEAGUE_ID]);
 
   // polling every POLL_MS (paused when tab hidden)
@@ -125,7 +149,8 @@ function WeeklyView() {
     };
   }, [week]);
 
-  const rows = useMemo(() => {
+  // compute base rows with all-play and flags
+  const rowsBase = useMemo(() => {
     if (!scores.length) return [];
     const max = Math.max(...scores.map((s) => Number(s.points || 0)));
     const min = Math.min(...scores.map((s) => Number(s.points || 0)));
@@ -133,16 +158,38 @@ function WeeklyView() {
       const pts = Number(t.points || 0);
       const wins = scores.filter((o) => Number(o.points || 0) < pts).length;
       const losses = scores.filter((o) => Number(o.points || 0) > pts).length;
+      const projected = projections[String(t.roster_id)];
+      const delta = projDeltas[String(t.roster_id)] || 0;
       return {
         ...t,
         wins,
         losses,
         isHighest: pts === max,
         isLowest: pts === min,
-        projected: projections[String(t.roster_id)] ?? null,
+        projected: projected != null ? Number(projected) : null,
+        projDelta: projected != null ? Number(delta) : 0,
       };
     });
-  }, [scores, projections]);
+  }, [scores, projections, projDeltas]);
+
+  // apply sorting when requested
+  const rows = useMemo(() => {
+    if (!sortKey) return rowsBase;
+    const sorted = [...rowsBase];
+    sorted.sort((a, b) => {
+      const aVal =
+        sortKey === "proj"
+          ? (a.projected ?? Number.NEGATIVE_INFINITY)
+          : Number(a.points || 0);
+      const bVal =
+        sortKey === "proj"
+          ? (b.projected ?? Number.NEGATIVE_INFINITY)
+          : Number(b.points || 0);
+      if (aVal === bVal) return 0;
+      return sortDir === "asc" ? aVal - bVal : bVal - aVal;
+    });
+    return sorted;
+  }, [rowsBase, sortKey, sortDir]);
 
   // lineup fetch with throttle per roster
   const toggleRoster = async (roster_id) => {
@@ -165,6 +212,20 @@ function WeeklyView() {
     } catch (e) {
       console.error("Failed to load lineup", e);
     }
+  };
+
+  const clickSort = (key) => {
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDir("desc"); // start desc
+    } else {
+      setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    }
+  };
+
+  const headerSortIcon = (key) => {
+    if (sortKey !== key) return "↕";
+    return sortDir === "desc" ? "↓" : "↑";
   };
 
   return (
@@ -203,8 +264,20 @@ function WeeklyView() {
                 <th>#</th>
                 <th>Team</th>
                 <th>Manager</th>
-                <th>Proj</th>
-                <th>Points</th>
+                <th
+                  style={{ cursor: "pointer", whiteSpace: "nowrap" }}
+                  onClick={() => clickSort("proj")}
+                  title="Sort by projected points"
+                >
+                  Proj <span className="muted">{headerSortIcon("proj")}</span>
+                </th>
+                <th
+                  style={{ cursor: "pointer", whiteSpace: "nowrap" }}
+                  onClick={() => clickSort("points")}
+                  title="Sort by actual points"
+                >
+                  Points <span className="muted">{headerSortIcon("points")}</span>
+                </th>
                 <th>All-Play</th>
                 <th></th>
               </tr>
@@ -222,6 +295,16 @@ function WeeklyView() {
                 const lineup = lineups[t.roster_id]?.starters || [];
                 const rowClass =
                   t.isHighest ? "badge-winner" : t.isLowest ? "badge-lowest" : "";
+
+                const projClass =
+                  t.projected == null
+                    ? ""
+                    : t.projDelta > 0
+                    ? "delta-up"
+                    : t.projDelta < 0
+                    ? "delta-down"
+                    : "";
+
                 return (
                   <React.Fragment key={t.roster_id}>
                     <tr className={rowClass}>
@@ -243,7 +326,9 @@ function WeeklyView() {
                         </div>
                       </td>
                       <td>{t.manager_name || "—"}</td>
-                      <td>{t.projected != null ? t.projected.toFixed(1) : "—"}</td>
+                      <td className={projClass}>
+                        {t.projected != null ? t.projected.toFixed(1) : "—"}
+                      </td>
                       <td>{Number(t.points || 0).toFixed(1)}</td>
                       <td>
                         {t.wins}-{t.losses}
