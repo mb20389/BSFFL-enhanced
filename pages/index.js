@@ -38,6 +38,7 @@ export default function Home() {
 function WeeklyView() {
   const [week, setWeek] = useState(1);
   const [scores, setScores] = useState([]);
+  const [projections, setProjections] = useState({}); // { [roster_id]: projected_points }
   const [loading, setLoading] = useState(false);
   const [openRoster, setOpenRoster] = useState(null);
   const [lineups, setLineups] = useState({}); // roster_id -> lineup payload
@@ -52,7 +53,7 @@ function WeeklyView() {
   const LEAGUE_ID = process.env.NEXT_PUBLIC_SLEEPER_LEAGUE_ID || "";
 
   // shared fetcher (aborts any in-flight request first)
-  const fetchScores = async (currentWeek) => {
+  const fetchWeekly = async (currentWeek) => {
     if (!LEAGUE_ID || !currentWeek) return;
 
     if (controllerRef.current) controllerRef.current.abort();
@@ -61,16 +62,30 @@ function WeeklyView() {
 
     setLoading(true);
     try {
-      const res = await fetch(`/api/scores?week=${currentWeek}`, {
-        signal: controller.signal,
+      const [scoresRes, projRes] = await Promise.all([
+        fetch(`/api/scores?week=${currentWeek}`, { signal: controller.signal }),
+        fetch(`/api/projections?week=${currentWeek}`, { signal: controller.signal }),
+      ]);
+
+      const [scoresJson, projJson] = await Promise.all([
+        scoresRes.json(),
+        projRes.ok ? projRes.json() : Promise.resolve([]),
+      ]);
+
+      setScores(Array.isArray(scoresJson) ? scoresJson : []);
+
+      const projMap = {};
+      (Array.isArray(projJson) ? projJson : []).forEach((p) => {
+        projMap[String(p.roster_id)] = Number(p.projected_points || 0);
       });
-      const data = await res.json();
-      setScores(Array.isArray(data) ? data : []);
+      setProjections(projMap);
+
       setLastUpdated(new Date());
     } catch (e) {
       if (e.name !== "AbortError") {
-        console.error("Failed to load scores", e);
+        console.error("Failed to load weekly data", e);
         setScores([]);
+        setProjections({});
       }
     } finally {
       setLoading(false);
@@ -80,7 +95,7 @@ function WeeklyView() {
   // initial load + when week changes
   useEffect(() => {
     if (!LEAGUE_ID) return;
-    fetchScores(week);
+    fetchWeekly(week);
     setOpenRoster(null);
     setLineups({});
   }, [week, LEAGUE_ID]);
@@ -91,13 +106,13 @@ function WeeklyView() {
       if (intervalRef.current) clearInterval(intervalRef.current);
       intervalRef.current = setInterval(() => {
         if (!document.hidden) {
-          fetchScores(week);
+          fetchWeekly(week);
         }
       }, POLL_MS);
     };
 
     const handleVisibility = () => {
-      if (!document.hidden) fetchScores(week);
+      if (!document.hidden) fetchWeekly(week);
     };
 
     startPolling();
@@ -124,9 +139,10 @@ function WeeklyView() {
         losses,
         isHighest: pts === max,
         isLowest: pts === min,
+        projected: projections[String(t.roster_id)] ?? null,
       };
     });
-  }, [scores]);
+  }, [scores, projections]);
 
   // lineup fetch with throttle per roster
   const toggleRoster = async (roster_id) => {
@@ -187,6 +203,7 @@ function WeeklyView() {
                 <th>#</th>
                 <th>Team</th>
                 <th>Manager</th>
+                <th>Proj</th>
                 <th>Points</th>
                 <th>All-Play</th>
                 <th></th>
@@ -195,7 +212,7 @@ function WeeklyView() {
             <tbody>
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="empty-cell">
+                  <td colSpan={7} className="empty-cell">
                     No scores found yet.
                   </td>
                 </tr>
@@ -226,6 +243,7 @@ function WeeklyView() {
                         </div>
                       </td>
                       <td>{t.manager_name || "—"}</td>
+                      <td>{t.projected != null ? t.projected.toFixed(1) : "—"}</td>
                       <td>{Number(t.points || 0).toFixed(1)}</td>
                       <td>
                         {t.wins}-{t.losses}
@@ -242,7 +260,7 @@ function WeeklyView() {
 
                     {isOpen && (
                       <tr>
-                        <td colSpan={6} className="expand-cell">
+                        <td colSpan={7} className="expand-cell">
                           {lineup.length === 0 ? (
                             <div>Loading lineup…</div>
                           ) : (
