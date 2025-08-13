@@ -224,3 +224,6 @@ html, body {
   .avatar { width: 30px; height: 30px; }
   .headshot { width: 24px; height: 24px; }
 }
+/* Projection delta coloring */
+.delta-up { color: #16a34a; }   /* green-600 */
+.delta-down { color: #dc2626; } /* red-600 */
