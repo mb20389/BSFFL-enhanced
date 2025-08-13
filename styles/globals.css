@@ -1,33 +1,178 @@
-/* styles/globals.css */
+/* Import Inter (light-weight way) */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap");
 
-/* Reset table basics */
-.table {
-  width: 100%;
-  border-collapse: collapse;
+:root {
+  --bg: #f7f8fa;
+  --card: #ffffff;
+  --text: #0f172a;
+  --muted: #64748b;
+  --border: #e5e7eb;
+  --accent: #2563eb;      /* blue */
+  --accent-600: #1d4ed8;
+  --accent-700: #1e40af;
+  --winner: #e6ffed;      /* light green */
+  --lowest: #ffecec;      /* light red */
+  --row-alt: #fafbfc;
 }
 
-.table th,
-.table td {
-  padding: 8px;
-  border-bottom: 1px solid #e5e7eb;
-  text-align: left;
+* { box-sizing: border-box; }
+
+html, body {
+  padding: 0;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
 }
 
-.table th {
-  background-color: #f9fafb;
+/* Layout */
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 16px 40px;
+}
+
+.header {
+  margin-bottom: 12px;
+}
+
+.title {
+  margin: 0 0 6px;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 20px;
+}
+
+.tab-btn {
+  padding: 10px 16px;
   font-weight: 600;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.tab-btn:hover {
+  border-color: var(--accent);
+}
+.tab-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
 }
 
+/* Panel / Controls */
+.panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.panel-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.input-group label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+.input-group select {
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px 10px;
+  min-width: 120px;
+  outline: none;
+}
+.input-group select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+.muted { color: var(--muted); }
+
+/* Cards */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px 12px 12px;
+}
+.table-title {
+  font-weight: 700;
+  padding: 8px 4px;
+  color: var(--text);
+}
+
+/* Table */
 .table-wrap {
+  width: 100%;
   overflow-x: auto;
 }
 
-/* Team cell styles */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 680px;
+  font-size: 14px;
+}
+
+.table thead th {
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+  background: #f9fafb;
+  font-weight: 600;
+  text-align: left;
+}
+
+.table tbody td {
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.table tbody tr:nth-child(odd) {
+  background: var(--row-alt);
+}
+
+.align-right { text-align: right; }
+
+.empty-cell {
+  text-align: center;
+  color: var(--muted);
+  padding: 14px;
+}
+
+.expand-cell {
+  padding: 10px;
+  background: #fafafa;
+}
+
+/* Team/Avatar cells */
 .cell-team {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+.team-name { font-weight: 600; }
 
 .avatar {
   width: 36px;
@@ -35,23 +180,47 @@
   border-radius: 50%;
   object-fit: cover;
 }
-
 .headshot {
   width: 28px;
   height: 28px;
-  border-radius: 4px;
+  border-radius: 6px;
   object-fit: cover;
 }
 
-/* Highlight winner row */
-.badge-winner {
-  background-color: #e6ffed;
+/* Highlights */
+.badge-winner { background-color: var(--winner); }
+.badge-lowest { background-color: var(--lowest); }
+
+/* Buttons */
+.btn {
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid var(--border);
+}
+.btn-light {
+  background: #fff;
+  color: var(--text);
+}
+.btn-light:hover {
+  border-color: var(--accent);
+}
+.btn-dark {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.btn-dark:hover {
+  background: var(--accent-600);
+  border-color: var(--accent-600);
 }
 
-/* already have .badge-winner (light green) — add lowest score highlight */
-.badge-lowest {
-  background-color: #ffecec; /* light red */
+/* Mobile tweaks */
+@media (max-width: 640px) {
+  .title { font-size: 22px; }
+  .table { min-width: 560px; }
+  .avatar { width: 30px; height: 30px; }
+  .headshot { width: 24px; height: 24px; }
 }
-
-
-
