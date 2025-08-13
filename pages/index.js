@@ -1,4 +1,7 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+
+const POLL_MS = Number(process.env.NEXT_PUBLIC_POLL_MS || 60000); // optional override
+const LINEUP_COOLDOWN_MS = 120000; // 2 minutes throttle per roster
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("weekly");
@@ -45,28 +48,75 @@ function WeeklyView() {
   const [scores, setScores] = useState([]);
   const [loading, setLoading] = useState(false);
   const [openRoster, setOpenRoster] = useState(null);
-  const [lineups, setLineups] = useState({});
+  const [lineups, setLineups] = useState({}); // roster_id -> lineup payload
+  const [lastUpdated, setLastUpdated] = useState(null);
+
+  // per-roster fetch timestamps for throttle
+  const lineupFetchedAtRef = useRef({}); // { [roster_id]: timestamp }
+
+  const controllerRef = useRef(null);
+  const intervalRef = useRef(null);
+
   const LEAGUE_ID = process.env.NEXT_PUBLIC_SLEEPER_LEAGUE_ID || "";
 
-  useEffect(() => {
-    if (!LEAGUE_ID) return;
-    const fetchScores = async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(`/api/scores?week=${week}`);
-        const data = await res.json();
-        setScores(Array.isArray(data) ? data : []);
-      } catch (e) {
+  // shared fetcher (aborts any in-flight request first)
+  const fetchScores = async (currentWeek) => {
+    if (!LEAGUE_ID || !currentWeek) return;
+
+    if (controllerRef.current) controllerRef.current.abort();
+    const controller = new AbortController();
+    controllerRef.current = controller;
+
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/scores?week=${currentWeek}`, {
+        signal: controller.signal,
+      });
+      const data = await res.json();
+      setScores(Array.isArray(data) ? data : []);
+      setLastUpdated(new Date());
+    } catch (e) {
+      if (e.name !== "AbortError") {
         console.error("Failed to load scores", e);
         setScores([]);
-      } finally {
-        setLoading(false);
       }
-    };
-    fetchScores();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // initial load + when week changes
+  useEffect(() => {
+    if (!LEAGUE_ID) return;
+    fetchScores(week);
     setOpenRoster(null);
     setLineups({});
   }, [week, LEAGUE_ID]);
+
+  // polling every POLL_MS (paused when tab hidden)
+  useEffect(() => {
+    const startPolling = () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      intervalRef.current = setInterval(() => {
+        if (!document.hidden) {
+          fetchScores(week);
+        }
+      }, POLL_MS);
+    };
+
+    const handleVisibility = () => {
+      if (!document.hidden) fetchScores(week);
+    };
+
+    startPolling();
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      if (controllerRef.current) controllerRef.current.abort();
+    };
+  }, [week]);
 
   const rows = useMemo(() => {
     if (!scores.length) return [];
@@ -86,38 +136,53 @@ function WeeklyView() {
     });
   }, [scores]);
 
+  // lineup fetch with throttle per roster
   const toggleRoster = async (roster_id) => {
     const willOpen = openRoster !== roster_id;
     setOpenRoster(willOpen ? roster_id : null);
-    if (willOpen && !lineups[roster_id]) {
-      try {
-        const res = await fetch(`/api/lineup?week=${week}&rosterId=${roster_id}`);
-        const data = await res.json();
-        setLineups((m) => ({ ...m, [roster_id]: data }));
-      } catch (e) {
-        console.error("Failed to load lineup", e);
-      }
+
+    if (!willOpen) return; // just closing
+
+    // if we already have lineup, and last fetch was recent, don't refetch
+    const lastTs = lineupFetchedAtRef.current[roster_id] || 0;
+    const now = Date.now();
+    const shouldThrottle = now - lastTs < LINEUP_COOLDOWN_MS;
+
+    if (lineups[roster_id] && shouldThrottle) return;
+
+    try {
+      const res = await fetch(`/api/lineup?week=${week}&rosterId=${roster_id}`);
+      const data = await res.json();
+      setLineups((m) => ({ ...m, [roster_id]: data }));
+      lineupFetchedAtRef.current[roster_id] = now;
+    } catch (e) {
+      console.error("Failed to load lineup", e);
     }
   };
 
   return (
     <section>
-      <div style={{ marginBottom: 12 }}>
-        <label htmlFor="week" style={{ marginRight: 8, fontWeight: 600 }}>
-          Week
-        </label>
-        <select
-          id="week"
-          value={week}
-          onChange={(e) => setWeek(Number(e.target.value))}
-          style={{ border: "1px solid #ddd", padding: "6px 8px", borderRadius: 6 }}
-        >
-          {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
-            <option key={w} value={w}>
-              Week {w}
-            </option>
-          ))}
-        </select>
+      <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 12 }}>
+        <div>
+          <label htmlFor="week" style={{ marginRight: 8, fontWeight: 600 }}>
+            Week
+          </label>
+          <select
+            id="week"
+            value={week}
+            onChange={(e) => setWeek(Number(e.target.value))}
+            style={{ border: "1px solid #ddd", padding: "6px 8px", borderRadius: 6 }}
+          >
+            {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
+              <option key={w} value={w}>
+                Week {w}
+              </option>
+            ))}
+          </select>
+        </div>
+        <small style={{ color: "#666" }}>
+          {lastUpdated ? `Last updated: ${lastUpdated.toLocaleTimeString()}` : ""}
+        </small>
       </div>
 
       {loading ? (
