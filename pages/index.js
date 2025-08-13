@@ -43,15 +43,14 @@ function WeeklyView() {
   const [openRoster, setOpenRoster] = useState(null);
   const [lineups, setLineups] = useState({}); // roster_id -> lineup payload
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [weeksList, setWeeksList] = useState(Array.from({ length: 18 }, (_, i) => i + 1));
 
   // sorting
   const [sortKey, setSortKey] = useState(null); // 'proj' | 'points' | null
   const [sortDir, setSortDir] = useState("desc"); // 'asc' | 'desc'
 
-  // per-roster fetch timestamps for throttle
+  // throttle helpers
   const lineupFetchedAtRef = useRef({}); // { [roster_id]: timestamp }
-
-  // keep the last projections to compute deltas (up/down)
   const prevProjectionsRef = useRef({}); // { [roster_id]: projected_points }
   const [projDeltas, setProjDeltas] = useState({}); // { [roster_id]: delta }
 
@@ -59,6 +58,21 @@ function WeeklyView() {
   const intervalRef = useRef(null);
 
   const LEAGUE_ID = process.env.NEXT_PUBLIC_SLEEPER_LEAGUE_ID || "";
+
+  // Get current NFL week for defaults
+  useEffect(() => {
+    const loadWeek = async () => {
+      try {
+        const r = await fetch("/api/nfl-week");
+        const wk = await r.json();
+        if (wk?.currentWeek) setWeek(Number(wk.currentWeek));
+        if (Array.isArray(wk?.weeksArrayAll)) setWeeksList(wk.weeksArrayAll);
+      } catch {
+        // fall back to defaults silently
+      }
+    };
+    loadWeek();
+  }, []);
 
   // shared fetcher (aborts any in-flight request first)
   const fetchWeekly = async (currentWeek) => {
@@ -82,13 +96,12 @@ function WeeklyView() {
 
       setScores(Array.isArray(scoresJson) ? scoresJson : []);
 
-      // projections mapping
       const nextProj = {};
       (Array.isArray(projJson) ? projJson : []).forEach((p) => {
         nextProj[String(p.roster_id)] = Number(p.projected_points || 0);
       });
 
-      // compute deltas vs previous
+      // deltas vs previous poll
       const prev = prevProjectionsRef.current || {};
       const deltas = {};
       Object.keys(nextProj).forEach((rid) => {
@@ -119,7 +132,6 @@ function WeeklyView() {
     fetchWeekly(week);
     setOpenRoster(null);
     setLineups({});
-    // reset sorting when week changes (optional)
     setSortKey(null);
     setSortDir("desc");
   }, [week, LEAGUE_ID]);
@@ -149,7 +161,6 @@ function WeeklyView() {
     };
   }, [week]);
 
-  // compute base rows with all-play and flags
   const rowsBase = useMemo(() => {
     if (!scores.length) return [];
     const max = Math.max(...scores.map((s) => Number(s.points || 0)));
@@ -172,31 +183,34 @@ function WeeklyView() {
     });
   }, [scores, projections, projDeltas]);
 
-  // apply sorting when requested
+  // sorting (weekly)
   const rows = useMemo(() => {
     if (!sortKey) return rowsBase;
     const sorted = [...rowsBase];
     sorted.sort((a, b) => {
-      const aVal =
-        sortKey === "proj"
-          ? (a.projected ?? Number.NEGATIVE_INFINITY)
-          : Number(a.points || 0);
-      const bVal =
-        sortKey === "proj"
-          ? (b.projected ?? Number.NEGATIVE_INFINITY)
-          : Number(b.points || 0);
+      const aVal = sortKey === "proj" ? (a.projected ?? Number.NEGATIVE_INFINITY) : Number(a.points || 0);
+      const bVal = sortKey === "proj" ? (b.projected ?? Number.NEGATIVE_INFINITY) : Number(b.points || 0);
       if (aVal === bVal) return 0;
       return sortDir === "asc" ? aVal - bVal : bVal - aVal;
     });
     return sorted;
   }, [rowsBase, sortKey, sortDir]);
 
+  const clickSort = (key) => {
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDir("desc");
+    } else {
+      setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    }
+  };
+  const headerSortIcon = (key) => (sortKey !== key ? "↕" : sortDir === "desc" ? "↓" : "↑");
+
   // lineup fetch with throttle per roster
   const toggleRoster = async (roster_id) => {
     const willOpen = openRoster !== roster_id;
     setOpenRoster(willOpen ? roster_id : null);
-
-    if (!willOpen) return; // just closing
+    if (!willOpen) return;
 
     const lastTs = lineupFetchedAtRef.current[roster_id] || 0;
     const now = Date.now();
@@ -214,42 +228,19 @@ function WeeklyView() {
     }
   };
 
-  const clickSort = (key) => {
-    if (sortKey !== key) {
-      setSortKey(key);
-      setSortDir("desc"); // start desc
-    } else {
-      setSortDir((d) => (d === "desc" ? "asc" : "desc"));
-    }
-  };
-
-  const headerSortIcon = (key) => {
-    if (sortKey !== key) return "↕";
-    return sortDir === "desc" ? "↓" : "↑";
-  };
-
   return (
     <section>
       <div className="panel">
         <div className="panel-row">
           <div className="input-group">
             <label htmlFor="week">Week</label>
-            <select
-              id="week"
-              value={week}
-              onChange={(e) => setWeek(Number(e.target.value))}
-            >
-              {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
-                <option key={w} value={w}>
-                  Week {w}
-                </option>
+            <select id="week" value={week} onChange={(e) => setWeek(Number(e.target.value))}>
+              {weeksList.map((w) => (
+                <option key={w} value={w}>Week {w}</option>
               ))}
             </select>
           </div>
-
-          <small className="muted">
-            {lastUpdated ? `Last updated: ${lastUpdated.toLocaleTimeString()}` : ""}
-          </small>
+          <small className="muted">{lastUpdated ? `Last updated: ${lastUpdated.toLocaleTimeString()}` : ""}</small>
         </div>
       </div>
 
@@ -264,18 +255,10 @@ function WeeklyView() {
                 <th>#</th>
                 <th>Team</th>
                 <th>Manager</th>
-                <th
-                  style={{ cursor: "pointer", whiteSpace: "nowrap" }}
-                  onClick={() => clickSort("proj")}
-                  title="Sort by projected points"
-                >
+                <th style={{ cursor: "pointer", whiteSpace: "nowrap" }} onClick={() => clickSort("proj")} title="Sort by projected points">
                   Proj <span className="muted">{headerSortIcon("proj")}</span>
                 </th>
-                <th
-                  style={{ cursor: "pointer", whiteSpace: "nowrap" }}
-                  onClick={() => clickSort("points")}
-                  title="Sort by actual points"
-                >
+                <th style={{ cursor: "pointer", whiteSpace: "nowrap" }} onClick={() => clickSort("points")} title="Sort by actual points">
                   Points <span className="muted">{headerSortIcon("points")}</span>
                 </th>
                 <th>All-Play</th>
@@ -284,60 +267,29 @@ function WeeklyView() {
             </thead>
             <tbody>
               {rows.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="empty-cell">
-                    No scores found yet.
-                  </td>
-                </tr>
+                <tr><td colSpan={7} className="empty-cell">No scores found yet.</td></tr>
               )}
               {rows.map((t, idx) => {
                 const isOpen = openRoster === t.roster_id;
                 const lineup = lineups[t.roster_id]?.starters || [];
-                const rowClass =
-                  t.isHighest ? "badge-winner" : t.isLowest ? "badge-lowest" : "";
-
-                const projClass =
-                  t.projected == null
-                    ? ""
-                    : t.projDelta > 0
-                    ? "delta-up"
-                    : t.projDelta < 0
-                    ? "delta-down"
-                    : "";
-
+                const rowClass = t.isHighest ? "badge-winner" : t.isLowest ? "badge-lowest" : "";
+                const projClass = t.projected == null ? "" : t.projDelta > 0 ? "delta-up" : t.projDelta < 0 ? "delta-down" : "";
                 return (
                   <React.Fragment key={t.roster_id}>
                     <tr className={rowClass}>
                       <td>{idx + 1}</td>
                       <td>
                         <div className="cell-team">
-                          {t.avatar && (
-                            <img
-                              className="avatar"
-                              src={t.avatar}
-                              alt={t.custom_team_name || t.sleeper_display_name}
-                            />
-                          )}
-                          <div className="team-name">
-                            {t.custom_team_name ||
-                              t.sleeper_display_name ||
-                              `Roster ${t.roster_id}`}
-                          </div>
+                          {t.avatar && <img className="avatar" src={t.avatar} alt={t.custom_team_name || t.sleeper_display_name} />}
+                          <div className="team-name">{t.custom_team_name || t.sleeper_display_name || `Roster ${t.roster_id}`}</div>
                         </div>
                       </td>
                       <td>{t.manager_name || "—"}</td>
-                      <td className={projClass}>
-                        {t.projected != null ? t.projected.toFixed(1) : "—"}
-                      </td>
+                      <td className={projClass}>{t.projected != null ? t.projected.toFixed(1) : "—"}</td>
                       <td>{Number(t.points || 0).toFixed(1)}</td>
+                      <td>{t.wins}-{t.losses}</td>
                       <td>
-                        {t.wins}-{t.losses}
-                      </td>
-                      <td>
-                        <button
-                          onClick={() => toggleRoster(t.roster_id)}
-                          className={`btn ${isOpen ? "btn-dark" : "btn-light"}`}
-                        >
+                        <button onClick={() => toggleRoster(t.roster_id)} className={`btn ${isOpen ? "btn-dark" : "btn-light"}`}>
                           {isOpen ? "Hide lineup" : "View lineup"}
                         </button>
                       </td>
@@ -366,21 +318,13 @@ function WeeklyView() {
                                       <td>{i + 1}</td>
                                       <td>
                                         <div className="cell-team">
-                                          {p.headshot && (
-                                            <img
-                                              className="headshot"
-                                              src={p.headshot}
-                                              alt={p.name}
-                                            />
-                                          )}
+                                          {p.headshot && <img className="headshot" src={p.headshot} alt={p.name} />}
                                           <span className="player-name">{p.name}</span>
                                         </div>
                                       </td>
                                       <td>{p.pos || "—"}</td>
                                       <td>{p.team || "—"}</td>
-                                      <td className="align-right">
-                                        {p.points.toFixed(1)}
-                                      </td>
+                                      <td className="align-right">{p.points.toFixed(1)}</td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -405,31 +349,119 @@ function WeeklyView() {
 
 function SeasonView() {
   const [season, setSeason] = useState([]);
+  const [prevSeason, setPrevSeason] = useState([]); // standings through compareWeek
   const [loading, setLoading] = useState(false);
+
+  // dynamic week info
+  const [capMaxWeek, setCapMaxWeek] = useState(14);
+  const [compareWeek, setCompareWeek] = useState(null);
+  const [compareOptions, setCompareOptions] = useState([]);
+
   const LEAGUE_ID = process.env.NEXT_PUBLIC_SLEEPER_LEAGUE_ID || "";
 
+  // Load current/prior weeks for standings
   useEffect(() => {
-    if (!LEAGUE_ID) return;
-    const fetchSeason = async () => {
+    const boot = async () => {
+      try {
+        const r = await fetch("/api/nfl-week");
+        const w = await r.json();
+        const maxW = Number(w?.cappedMaxWeekForStandings || 14);
+        const priorW = w?.cappedPriorForStandings ?? null;
+
+        setCapMaxWeek(maxW);
+        setCompareWeek(priorW); // default to prior capped week (or null)
+        // options are 1..(maxW-1)
+        const opts = Array.from({ length: Math.max(maxW - 1, 0) }, (_, i) => i + 1);
+        setCompareOptions(opts);
+      } catch {
+        setCapMaxWeek(14);
+        setCompareWeek(13);
+        setCompareOptions(Array.from({ length: 13 }, (_, i) => i + 1));
+      }
+    };
+    boot();
+  }, []);
+
+  // Fetch current season and comparison season when inputs ready
+  useEffect(() => {
+    if (!LEAGUE_ID || !capMaxWeek) return;
+
+    const load = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/scores?week=season&maxWeek=14`);
-        const data = await res.json();
-        setSeason(Array.isArray(data) ? data : []);
+        const currUrl = `/api/scores?week=season&maxWeek=${capMaxWeek}`;
+        const currRes = await fetch(currUrl);
+        const curr = await currRes.json();
+
+        let prev = [];
+        if (compareWeek && compareWeek >= 1) {
+          const prevUrl = `/api/scores?week=season&maxWeek=${compareWeek}`;
+          const prevRes = await fetch(prevUrl);
+          if (prevRes.ok) prev = await prevRes.json();
+        }
+
+        setSeason(Array.isArray(curr) ? curr : []);
+        setPrevSeason(Array.isArray(prev) ? prev : []);
       } catch (e) {
         console.error("Failed to load season standings", e);
         setSeason([]);
+        setPrevSeason([]);
       } finally {
         setLoading(false);
       }
     };
-    fetchSeason();
-  }, [LEAGUE_ID]);
+
+    load();
+  }, [LEAGUE_ID, capMaxWeek, compareWeek]);
+
+  // Build previous ranks map
+  const prevRankMap = useMemo(() => {
+    const map = new Map();
+    (prevSeason || []).forEach((t, idx) => map.set(String(t.roster_id), idx + 1));
+    return map;
+  }, [prevSeason]);
+
+  // Combine with delta arrows
+  const seasonWithDelta = useMemo(() => {
+    return (season || []).map((t, idx) => {
+      const currRank = idx + 1;
+      const prevRank = prevRankMap.get(String(t.roster_id));
+      const delta = prevRank ? prevRank - currRank : 0; // + = moved up
+      return { ...t, currRank, prevRank: prevRank || null, delta };
+    });
+  }, [season, prevRankMap]);
+
+  const renderDelta = (delta) => {
+    if (!compareWeek) return <span className="muted">—</span>;
+    if (delta > 0) return <span className="delta-up">▲ {delta}</span>;
+    if (delta < 0) return <span className="delta-down">▼ {Math.abs(delta)}</span>;
+    return <span className="muted">▬</span>;
+  };
 
   return (
     <section>
+      <div className="panel">
+        <div className="panel-row">
+          <div className="input-group">
+            <label>Compare vs Week</label>
+            <select
+              value={compareWeek || ""}
+              onChange={(e) => setCompareWeek(e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">(none)</option>
+              {compareOptions.map((w) => (
+                <option key={w} value={w}>Week {w}</option>
+              ))}
+            </select>
+          </div>
+          <div className="muted" style={{ fontSize: 13 }}>
+            Showing standings through <strong>Week {capMaxWeek}</strong>
+          </div>
+        </div>
+      </div>
+
       <div className="table-wrap card">
-        <div className="table-title">Season Standings (Weeks 1–14)</div>
+        <div className="table-title">Season Standings (Weeks 1–{capMaxWeek})</div>
         {loading ? (
           <p className="muted">Loading standings…</p>
         ) : (
@@ -437,6 +469,7 @@ function SeasonView() {
             <thead>
               <tr>
                 <th>#</th>
+                <th>Δ</th>
                 <th>Team</th>
                 <th>Manager</th>
                 <th>W</th>
@@ -448,16 +481,15 @@ function SeasonView() {
               </tr>
             </thead>
             <tbody>
-              {season.length === 0 && (
+              {seasonWithDelta.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="empty-cell">
-                    Season totals not available yet.
-                  </td>
+                  <td colSpan={10} className="empty-cell">Season totals not available yet.</td>
                 </tr>
               )}
-              {season.map((s, idx) => (
+              {seasonWithDelta.map((s) => (
                 <tr key={s.roster_id}>
-                  <td>{idx + 1}</td>
+                  <td>{s.currRank}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>{renderDelta(s.delta)}</td>
                   <td>
                     <div className="cell-team">
                       {s.avatar && (
@@ -468,9 +500,7 @@ function SeasonView() {
                         />
                       )}
                       <div className="team-name">
-                        {s.custom_team_name ||
-                          s.sleeper_display_name ||
-                          `Roster ${s.roster_id}`}
+                        {s.custom_team_name || s.sleeper_display_name || `Roster ${s.roster_id}`}
                       </div>
                     </div>
                   </td>
