@@ -1,3 +1,4 @@
+// pages/index.js
 import React, { useState, useEffect, useMemo, useRef } from "react";
 
 const POLL_MS = Number(process.env.NEXT_PUBLIC_POLL_MS || 60000); // optional override
@@ -5,12 +6,33 @@ const LINEUP_COOLDOWN_MS = 120000; // 2 minutes throttle per roster
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("weekly");
+  const LEAGUE_ID = process.env.NEXT_PUBLIC_SLEEPER_LEAGUE_ID || "";
+  const sleeperLeagueUrl = LEAGUE_ID ? `https://sleeper.com/leagues/${LEAGUE_ID}` : "#";
 
   return (
     <div className="container">
-      <header className="header">
-        <h1 className="title">BSFFL All-Play Standings</h1>
-        <p className="subtitle">Live data from Sleeper • Weekly & season totals</p>
+      <header className="header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div>
+          <h1 className="title">BSFFL All-Play Standings</h1>
+          <p className="subtitle">Live data from Sleeper • Weekly & season totals</p>
+        </div>
+
+        {LEAGUE_ID ? (
+          <a
+            href={sleeperLeagueUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-light"
+            title="Open league on Sleeper"
+            style={{ display: "inline-flex", alignItems: "center", gap: 8, textDecoration: "none" }}
+          >
+            {/* Simple external-link style icon */}
+            <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3zM5 5h6v2H7v10h10v-4h2v6H5V5z" fill="currentColor"/>
+            </svg>
+            <span>View on Sleeper</span>
+          </a>
+        ) : null}
       </header>
 
       <div className="tabs">
@@ -68,7 +90,7 @@ function WeeklyView() {
         if (wk?.currentWeek) setWeek(Number(wk.currentWeek));
         if (Array.isArray(wk?.weeksArrayAll)) setWeeksList(wk.weeksArrayAll);
       } catch {
-        // fall back to defaults silently
+        // silent fallback to defaults
       }
     };
     loadWeek();
@@ -441,7 +463,7 @@ function SeasonView() {
   return (
     <section>
       <div className="panel">
-        <div className="panel-row">
+        <div className="panel-row" style={{ gap: 16 }}>
           <div className="input-group">
             <label>Compare vs Week</label>
             <select
@@ -454,6 +476,7 @@ function SeasonView() {
               ))}
             </select>
           </div>
+
           <div className="muted" style={{ fontSize: 13 }}>
             Showing standings through <strong>Week {capMaxWeek}</strong>
           </div>
