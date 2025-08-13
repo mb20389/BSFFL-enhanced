@@ -71,11 +71,18 @@ function WeeklyView() {
   const rows = useMemo(() => {
     if (!scores.length) return [];
     const max = Math.max(...scores.map((s) => Number(s.points || 0)));
+    const min = Math.min(...scores.map((s) => Number(s.points || 0)));
     return scores.map((t) => {
       const pts = Number(t.points || 0);
       const wins = scores.filter((o) => Number(o.points || 0) < pts).length;
       const losses = scores.filter((o) => Number(o.points || 0) > pts).length;
-      return { ...t, wins, losses, isWinner: pts === max };
+      return {
+        ...t,
+        wins,
+        losses,
+        isHighest: pts === max,
+        isLowest: pts === min,
+      };
     });
   }, [scores]);
 
@@ -103,11 +110,7 @@ function WeeklyView() {
           id="week"
           value={week}
           onChange={(e) => setWeek(Number(e.target.value))}
-          style={{
-            border: "1px solid #ddd",
-            padding: "6px 8px",
-            borderRadius: 6,
-          }}
+          style={{ border: "1px solid #ddd", padding: "6px 8px", borderRadius: 6 }}
         >
           {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
             <option key={w} value={w}>
@@ -143,9 +146,11 @@ function WeeklyView() {
               {rows.map((t, idx) => {
                 const isOpen = openRoster === t.roster_id;
                 const lineup = lineups[t.roster_id]?.starters || [];
+                const rowClass =
+                  t.isHighest ? "badge-winner" : t.isLowest ? "badge-lowest" : "";
                 return (
                   <React.Fragment key={t.roster_id}>
-                    <tr className={t.isWinner ? "badge-winner" : ""}>
+                    <tr className={rowClass}>
                       <td>{idx + 1}</td>
                       <td>
                         <div className="cell-team">
@@ -186,7 +191,7 @@ function WeeklyView() {
                     </tr>
 
                     {isOpen && (
-                      <tr key={`${t.roster_id}-lineup`}>
+                      <tr>
                         <td colSpan={6} style={{ padding: 8, background: "#fafafa" }}>
                           {lineup.length === 0 ? (
                             <div>Loading lineup…</div>
@@ -279,49 +284,50 @@ function SeasonView() {
                 <th>#</th>
                 <th>Team</th>
                 <th>Manager</th>
-                <th>Total Wins</th>
-                <th>Total Losses</th>
-                <th>Total Points</th>
+                <th>W</th>
+                <th>L</th>
+                <th>Pts</th>
+                <th>High Weeks</th>
+                <th>Low Weeks</th>
+                <th>GB</th>
               </tr>
             </thead>
             <tbody>
               {season.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{ padding: 12 }}>
+                  <td colSpan={9} style={{ padding: 12 }}>
                     Season totals not available yet.
                   </td>
                 </tr>
               )}
-              {season
-                .sort(
-                  (a, b) =>
-                    b.totalWins - a.totalWins || b.totalPoints - a.totalPoints
-                )
-                .map((s, idx) => (
-                  <tr key={s.roster_id}>
-                    <td>{idx + 1}</td>
-                    <td>
-                      <div className="cell-team">
-                        {s.avatar && (
-                          <img
-                            className="avatar"
-                            src={s.avatar}
-                            alt={s.custom_team_name || s.sleeper_display_name}
-                          />
-                        )}
-                        <div style={{ fontWeight: 600 }}>
-                          {s.custom_team_name ||
-                            s.sleeper_display_name ||
-                            `Roster ${s.roster_id}`}
-                        </div>
+              {season.map((s, idx) => (
+                <tr key={s.roster_id}>
+                  <td>{idx + 1}</td>
+                  <td>
+                    <div className="cell-team">
+                      {s.avatar && (
+                        <img
+                          className="avatar"
+                          src={s.avatar}
+                          alt={s.custom_team_name || s.sleeper_display_name}
+                        />
+                      )}
+                      <div style={{ fontWeight: 600 }}>
+                        {s.custom_team_name ||
+                          s.sleeper_display_name ||
+                          `Roster ${s.roster_id}`}
                       </div>
-                    </td>
-                    <td>{s.manager_name || "—"}</td>
-                    <td>{s.totalWins}</td>
-                    <td>{s.totalLosses}</td>
-                    <td>{Number(s.totalPoints || 0).toFixed(1)}</td>
-                  </tr>
-                ))}
+                    </div>
+                  </td>
+                  <td>{s.manager_name || "—"}</td>
+                  <td>{s.totalWins}</td>
+                  <td>{s.totalLosses}</td>
+                  <td>{Number(s.totalPoints || 0).toFixed(1)}</td>
+                  <td>{s.highWeeks ?? 0}</td>
+                  <td>{s.lowWeeks ?? 0}</td>
+                  <td>{Number(s.gamesBack ?? 0).toFixed(1)}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
