@@ -7,32 +7,22 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState("weekly");
 
   return (
-    <div style={{ padding: 24, fontFamily: "Inter, system-ui, sans-serif" }}>
-      <h1 style={{ marginBottom: 16 }}>Fantasy Football — All-Play Standings</h1>
-      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+    <div className="container">
+      <header className="header">
+        <h1 className="title">BSFFL All-Play Standings</h1>
+        <p className="subtitle">Live data from Sleeper • Weekly & season totals</p>
+      </header>
+
+      <div className="tabs">
         <button
           onClick={() => setActiveTab("weekly")}
-          style={{
-            padding: "8px 16px",
-            fontWeight: 600,
-            borderRadius: 8,
-            border: "1px solid #ccc",
-            background: activeTab === "weekly" ? "#111827" : "#f3f4f6",
-            color: activeTab === "weekly" ? "#fff" : "#111827",
-          }}
+          className={`tab-btn ${activeTab === "weekly" ? "active" : ""}`}
         >
           Weekly
         </button>
         <button
           onClick={() => setActiveTab("season")}
-          style={{
-            padding: "8px 16px",
-            fontWeight: 600,
-            borderRadius: 8,
-            border: "1px solid #ccc",
-            background: activeTab === "season" ? "#111827" : "#f3f4f6",
-            color: activeTab === "season" ? "#fff" : "#111827",
-          }}
+          className={`tab-btn ${activeTab === "season" ? "active" : ""}`}
         >
           Season
         </button>
@@ -42,6 +32,8 @@ export default function Home() {
     </div>
   );
 }
+
+/* -------------------- WEEKLY -------------------- */
 
 function WeeklyView() {
   const [week, setWeek] = useState(1);
@@ -143,7 +135,6 @@ function WeeklyView() {
 
     if (!willOpen) return; // just closing
 
-    // if we already have lineup, and last fetch was recent, don't refetch
     const lastTs = lineupFetchedAtRef.current[roster_id] || 0;
     const now = Date.now();
     const shouldThrottle = now - lastTs < LINEUP_COOLDOWN_MS;
@@ -162,33 +153,34 @@ function WeeklyView() {
 
   return (
     <section>
-      <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 12 }}>
-        <div>
-          <label htmlFor="week" style={{ marginRight: 8, fontWeight: 600 }}>
-            Week
-          </label>
-          <select
-            id="week"
-            value={week}
-            onChange={(e) => setWeek(Number(e.target.value))}
-            style={{ border: "1px solid #ddd", padding: "6px 8px", borderRadius: 6 }}
-          >
-            {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
-              <option key={w} value={w}>
-                Week {w}
-              </option>
-            ))}
-          </select>
+      <div className="panel">
+        <div className="panel-row">
+          <div className="input-group">
+            <label htmlFor="week">Week</label>
+            <select
+              id="week"
+              value={week}
+              onChange={(e) => setWeek(Number(e.target.value))}
+            >
+              {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
+                <option key={w} value={w}>
+                  Week {w}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <small className="muted">
+            {lastUpdated ? `Last updated: ${lastUpdated.toLocaleTimeString()}` : ""}
+          </small>
         </div>
-        <small style={{ color: "#666" }}>
-          {lastUpdated ? `Last updated: ${lastUpdated.toLocaleTimeString()}` : ""}
-        </small>
       </div>
 
       {loading ? (
-        <p>Loading scores…</p>
+        <p className="muted">Loading scores…</p>
       ) : (
-        <div className="table-wrap">
+        <div className="table-wrap card">
+          <div className="table-title">Weekly Results</div>
           <table className="table">
             <thead>
               <tr>
@@ -203,7 +195,7 @@ function WeeklyView() {
             <tbody>
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{ padding: 12 }}>
+                  <td colSpan={6} className="empty-cell">
                     No scores found yet.
                   </td>
                 </tr>
@@ -226,7 +218,7 @@ function WeeklyView() {
                               alt={t.custom_team_name || t.sleeper_display_name}
                             />
                           )}
-                          <div style={{ fontWeight: 600 }}>
+                          <div className="team-name">
                             {t.custom_team_name ||
                               t.sleeper_display_name ||
                               `Roster ${t.roster_id}`}
@@ -241,14 +233,7 @@ function WeeklyView() {
                       <td>
                         <button
                           onClick={() => toggleRoster(t.roster_id)}
-                          style={{
-                            padding: "6px 10px",
-                            border: "1px solid #e5e7eb",
-                            borderRadius: 8,
-                            background: isOpen ? "#111827" : "#f3f4f6",
-                            color: isOpen ? "#fff" : "#111827",
-                            fontWeight: 600,
-                          }}
+                          className={`btn ${isOpen ? "btn-dark" : "btn-light"}`}
                         >
                           {isOpen ? "Hide lineup" : "View lineup"}
                         </button>
@@ -257,11 +242,11 @@ function WeeklyView() {
 
                     {isOpen && (
                       <tr>
-                        <td colSpan={6} style={{ padding: 8, background: "#fafafa" }}>
+                        <td colSpan={6} className="expand-cell">
                           {lineup.length === 0 ? (
                             <div>Loading lineup…</div>
                           ) : (
-                            <div className="table-wrap">
+                            <div className="table-wrap inner">
                               <table className="table">
                                 <thead>
                                   <tr>
@@ -269,7 +254,7 @@ function WeeklyView() {
                                     <th>Player</th>
                                     <th>Pos</th>
                                     <th>Team</th>
-                                    <th style={{ textAlign: "right" }}>Points</th>
+                                    <th className="align-right">Points</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -285,12 +270,12 @@ function WeeklyView() {
                                               alt={p.name}
                                             />
                                           )}
-                                          <span style={{ fontWeight: 600 }}>{p.name}</span>
+                                          <span className="player-name">{p.name}</span>
                                         </div>
                                       </td>
                                       <td>{p.pos || "—"}</td>
                                       <td>{p.team || "—"}</td>
-                                      <td style={{ textAlign: "right" }}>
+                                      <td className="align-right">
                                         {p.points.toFixed(1)}
                                       </td>
                                     </tr>
@@ -312,6 +297,8 @@ function WeeklyView() {
     </section>
   );
 }
+
+/* -------------------- SEASON -------------------- */
 
 function SeasonView() {
   const [season, setSeason] = useState([]);
@@ -338,11 +325,11 @@ function SeasonView() {
 
   return (
     <section>
-      <h2>Season Standings (Weeks 1–14)</h2>
-      {loading ? (
-        <p>Loading standings…</p>
-      ) : (
-        <div className="table-wrap">
+      <div className="table-wrap card">
+        <div className="table-title">Season Standings (Weeks 1–14)</div>
+        {loading ? (
+          <p className="muted">Loading standings…</p>
+        ) : (
           <table className="table">
             <thead>
               <tr>
@@ -360,7 +347,7 @@ function SeasonView() {
             <tbody>
               {season.length === 0 && (
                 <tr>
-                  <td colSpan={9} style={{ padding: 12 }}>
+                  <td colSpan={9} className="empty-cell">
                     Season totals not available yet.
                   </td>
                 </tr>
@@ -377,7 +364,7 @@ function SeasonView() {
                           alt={s.custom_team_name || s.sleeper_display_name}
                         />
                       )}
-                      <div style={{ fontWeight: 600 }}>
+                      <div className="team-name">
                         {s.custom_team_name ||
                           s.sleeper_display_name ||
                           `Roster ${s.roster_id}`}
@@ -395,8 +382,8 @@ function SeasonView() {
               ))}
             </tbody>
           </table>
-        </div>
-      )}
+        )}
+      </div>
     </section>
   );
 }
