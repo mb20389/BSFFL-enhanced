@@ -3,6 +3,19 @@ import NodeCache from "node-cache";
 
 const cache = new NodeCache({ stdTTL: 5 * 60 }); // 5 minutes default
 
+// ---- BSFFL week helper ----
+function getBsfflWeek(weekOneDate, totalWeeks = 18) {
+  const now = new Date();
+  const start = new Date(weekOneDate); // e.g. "2025-09-04T20:00:00Z"
+  if (isNaN(start.getTime())) return 0;
+
+  const diffMs = now - start;
+  if (diffMs < 0) return 0;
+
+  const weekIndex = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
+  return Math.min(weekIndex + 1, totalWeeks);
+}
+
 // helpers
 const getLeagueId = (req) =>
   req.query.leagueId ||
@@ -33,13 +46,17 @@ function enrichWeeklyRows(matchups, users, rosters) {
         // team/manager metadata
         sleeper_display_name: owner?.display_name || "Unknown",
         custom_team_name:
-          owner?.metadata?.team_name || owner?.display_name || `Roster ${m.roster_id}`,
+          owner?.metadata?.team_name ||
+          owner?.display_name ||
+          `Roster ${m.roster_id}`,
         manager_name:
           owner?.metadata?.team_nickname ||
           `${owner?.metadata?.first_name || ""} ${owner?.metadata?.last_name || ""}`.trim() ||
           owner?.display_name ||
           null,
-        avatar: owner?.avatar ? `https://sleepercdn.com/avatars/${owner.avatar}` : null,
+        avatar: owner?.avatar
+          ? `https://sleepercdn.com/avatars/${owner.avatar}`
+          : null,
       };
     })
     .sort((a, b) => b.points - a.points);
@@ -50,13 +67,12 @@ function accumulateSeason(allWeeks, users, rosters) {
   const byOwner = new Map(users.map((u) => [u.user_id, u]));
   const byRoster = new Map(rosters.map((r) => [String(r.roster_id), r]));
 
-  // roster_id -> tallies
-  const totals = new Map(); // { totalPoints, totalWins, totalLosses, highWeeks, lowWeeks }
+  const totals = new Map();
 
   for (const { rows } of allWeeks) {
     if (!rows.length) continue;
 
-    // Points add-up
+    // Add up points
     rows.forEach(({ roster_id, points }) => {
       const key = String(roster_id);
       if (!totals.has(key)) {
@@ -72,7 +88,7 @@ function accumulateSeason(allWeeks, users, rosters) {
       t.totalPoints += Number(points || 0);
     });
 
-    // All-play wins/losses for the week
+    // Wins/losses
     rows.forEach(({ roster_id, points }) => {
       const pts = Number(points || 0);
       const wins = rows.filter((x) => Number(x.points || 0) < pts).length;
@@ -82,7 +98,7 @@ function accumulateSeason(allWeeks, users, rosters) {
       t.totalLosses += losses;
     });
 
-    // Weekly high/low awards (ties give credit to all tied teams)
+    // High/low
     const maxPts = Math.max(...rows.map((r) => Number(r.points || 0)));
     const minPts = Math.min(...rows.map((r) => Number(r.points || 0)));
     rows.forEach(({ roster_id, points }) => {
@@ -92,7 +108,6 @@ function accumulateSeason(allWeeks, users, rosters) {
     });
   }
 
-  // Format + enrich user/roster metadata
   const out = Array.from(totals.entries()).map(([roster_id, t]) => {
     const roster = byRoster.get(roster_id);
     const owner = roster ? byOwner.get(roster.owner_id) : null;
@@ -106,27 +121,29 @@ function accumulateSeason(allWeeks, users, rosters) {
       lowWeeks: t.lowWeeks,
 
       custom_team_name:
-        owner?.metadata?.team_name || owner?.display_name || `Roster ${roster_id}`,
+        owner?.metadata?.team_name ||
+        owner?.display_name ||
+        `Roster ${roster_id}`,
       sleeper_display_name: owner?.display_name || "Unknown",
       manager_name:
         owner?.metadata?.team_nickname ||
         `${owner?.metadata?.first_name || ""} ${owner?.metadata?.last_name || ""}`.trim() ||
         owner?.display_name ||
         null,
-      avatar: owner?.avatar ? `https://sleepercdn.com/avatars/${owner.avatar}` : null,
+      avatar: owner?.avatar
+        ? `https://sleepercdn.com/avatars/${owner.avatar}`
+        : null,
     };
   });
 
-  // Sort primarily by wins desc, then points desc
   out.sort((a, b) => b.totalWins - a.totalWins || b.totalPoints - a.totalPoints);
 
-  // Compute Games Back (GB) vs first place using classic formula:
-  // GB = ((leaderWins - wins) + (losses - leaderLosses)) / 2
   if (out.length > 0) {
     const leaderWins = out[0].totalWins;
     const leaderLosses = out[0].totalLosses;
     out.forEach((t) => {
-      t.gamesBack = ((leaderWins - t.totalWins) + (t.totalLosses - leaderLosses)) / 2;
+      t.gamesBack =
+        (leaderWins - t.totalWins + (t.totalLosses - leaderLosses)) / 2;
     });
   }
 
@@ -143,8 +160,13 @@ export default async function handler(req, res) {
 
   try {
     const isSeason = String(week).toLowerCase() === "season";
+
+    // compute BSFFL week based on kickoff date
+    const weekOneDate = "2025-09-04T20:00:00Z"; // adjust kickoff date/time
+    const bsfflWeek = getBsfflWeek(weekOneDate, 18);
+
     const maxWk = isSeason
-      ? Math.min(Math.max(Number(maxWeek || 14), 1), 50)
+      ? Math.min(Math.max(Number(maxWeek || bsfflWeek), 1), 50)
       : Number(week);
 
     if (!isSeason && (!maxWk || isNaN(maxWk) || maxWk < 1 || maxWk > 50)) {
@@ -173,7 +195,7 @@ export default async function handler(req, res) {
       return res.status(200).json(enriched);
     }
 
-    // season aggregation 1..maxWk
+    // season aggregation 1..maxWk (capped at bsfflWeek)
     const allWeeks = [];
     for (let w = 1; w <= maxWk; w++) {
       try {
@@ -190,8 +212,10 @@ export default async function handler(req, res) {
     }
 
     const seasonRows = accumulateSeason(allWeeks, users, rosters);
-    cache.set(cacheKey, seasonRows, 60 * 30); // 30 min
-    return res.status(200).json(seasonRows);
+    const payload = { bsfflWeek, seasonRows };
+
+    cache.set(cacheKey, payload, 60 * 30); // 30 min
+    return res.status(200).json(payload);
   } catch (err) {
     console.error("scores api error:", err);
     return res.status(500).json({ error: "Failed to fetch scores" });
