@@ -72,7 +72,7 @@ function WeeklyView() {
 
   const LEAGUE_ID = process.env.NEXT_PUBLIC_SLEEPER_LEAGUE_ID || "";
 
-  // Get current BSFFL week for defaults
+  // Default to current BSFFL week
   useEffect(() => {
     const loadWeek = async () => {
       try {
@@ -251,8 +251,7 @@ function WeeklyView() {
         </div>
       </div>
 
-      {/* Table remains unchanged */}
-      {/* ... */}
+      {/* Table remains same as your version */}
     </section>
   );
 }
@@ -292,6 +291,132 @@ function SeasonView() {
     boot();
   }, []);
 
-  // rest of SeasonView remains same except it now uses capMaxWeek from bsffl
-  // ...
+  useEffect(() => {
+    if (!LEAGUE_ID || !capMaxWeek) return;
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        const currUrl = `/api/scores?week=season&maxWeek=${capMaxWeek}`;
+        const currRes = await fetch(currUrl);
+        const curr = await currRes.json();
+
+        let prev = [];
+        if (compareWeek && compareWeek >= 1) {
+          const prevUrl = `/api/scores?week=season&maxWeek=${compareWeek}`;
+          const prevRes = await fetch(prevUrl);
+          if (prevRes.ok) prev = await prevRes.json();
+        }
+
+        // Note: /api/scores returns { bsfflWeek, seasonRows }
+        setSeason(Array.isArray(curr?.seasonRows) ? curr.seasonRows : []);
+        setPrevSeason(Array.isArray(prev?.seasonRows) ? prev.seasonRows : []);
+      } catch (e) {
+        console.error("Failed to load season standings", e);
+        setSeason([]);
+        setPrevSeason([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, [LEAGUE_ID, capMaxWeek, compareWeek]);
+
+  const prevRankMap = useMemo(() => {
+    const map = new Map();
+    (prevSeason || []).forEach((t, idx) => map.set(String(t.roster_id), idx + 1));
+    return map;
+  }, [prevSeason]);
+
+  const seasonWithDelta = useMemo(() => {
+    return (season || []).map((t, idx) => {
+      const currRank = idx + 1;
+      const prevRank = prevRankMap.get(String(t.roster_id));
+      const delta = prevRank ? prevRank - currRank : 0;
+      return { ...t, currRank, prevRank: prevRank || null, delta };
+    });
+  }, [season, prevRankMap]);
+
+  const renderDelta = (delta) => {
+    if (!compareWeek) return <span className="muted">—</span>;
+    if (delta > 0) return <span className="delta-up">▲ {delta}</span>;
+    if (delta < 0) return <span className="delta-down">▼ {Math.abs(delta)}</span>;
+    return <span className="muted">▬</span>;
+  };
+
+  return (
+    <section>
+      <div className="panel">
+        <div className="panel-row" style={{ gap: 16 }}>
+          <div className="input-group">
+            <label>Compare vs Week</label>
+            <select value={compareWeek || ""} onChange={(e) => setCompareWeek(e.target.value ? Number(e.target.value) : null)}>
+              <option value="">(none)</option>
+              {compareOptions.map((w) => (
+                <option key={w} value={w}>Week {w}</option>
+              ))}
+            </select>
+          </div>
+          <div className="muted" style={{ fontSize: 13 }}>
+            Showing standings through <strong>Week {capMaxWeek}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div className="table-wrap card">
+        <div className="table-title">Season Standings (Weeks 1–{capMaxWeek})</div>
+        {loading ? (
+          <p className="muted">Loading standings…</p>
+        ) : (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Δ</th>
+                <th>Team</th>
+                <th>Manager</th>
+                <th>W</th>
+                <th>L</th>
+                <th>Pts</th>
+                <th>High Weeks</th>
+                <th>Low Weeks</th>
+                <th>GB</th>
+              </tr>
+            </thead>
+            <tbody>
+              {seasonWithDelta.length === 0 && (
+                <tr>
+                  <td colSpan={10} className="empty-cell">Season totals not available yet.</td>
+                </tr>
+              )}
+              {seasonWithDelta.map((s) => (
+                <tr key={s.roster_id}>
+                  <td>{s.currRank}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>{renderDelta(s.delta)}</td>
+                  <td>
+                    <div className="cell-team">
+                      {s.avatar && (
+                        <img className="avatar" src={s.avatar} alt={s.custom_team_name || s.sleeper_display_name} />
+                      )}
+                      <div className="team-name">
+                        {s.custom_team_name || s.sleeper_display_name || `Roster ${s.roster_id}`}
+                      </div>
+                    </div>
+                  </td>
+                  <td>{s.manager_name || "—"}</td>
+                  <td>{s.totalWins}</td>
+                  <td>{s.totalLosses}</td>
+                  <td>{Number(s.totalPoints || 0).toFixed(1)}</td>
+                  <td>{s.highWeeks ?? 0}</td>
+                  <td>{s.lowWeeks ?? 0}</td>
+                  <td>{Number(s.gamesBack ?? 0).toFixed(1)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </section>
+  );
 }
