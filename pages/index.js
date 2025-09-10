@@ -112,8 +112,15 @@ function WeeklyView() {
         projRes.ok ? projRes.json() : Promise.resolve([]),
       ]);
 
-      setScores(Array.isArray(scoresJson) ? scoresJson : []);
-
+      // ✅ handle both array and object with rows
+if (Array.isArray(scoresJson)) {
+  setScores(scoresJson);
+} else if (Array.isArray(scoresJson?.rows)) {
+  setScores(scoresJson.rows);
+} else {
+  setScores([]);
+}
+      
       const nextProj = {};
       (Array.isArray(projJson) ? projJson : []).forEach((p) => {
         nextProj[String(p.roster_id)] = Number(p.projected_points || 0);
