@@ -263,8 +263,48 @@ if (Array.isArray(scoresJson)) {
           <small className="muted">{lastUpdated ? `Last updated: ${lastUpdated.toLocaleTimeString()}` : ""}</small>
         </div>
       </div>
+<section>
+  <div className="panel">
+    ...
+  </div>
 
-      {/* Table remains same as your version */}
+  {loading ? (
+    <p className="muted">Loading scores…</p>
+  ) : (
+    <div className="table-wrap card">
+      <table className="table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Team</th>
+            <th>Manager</th>
+            <th>Proj</th>
+            <th>Points</th>
+            <th>All-Play</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {scores.length === 0 && (
+            <tr><td colSpan={7}>No scores found.</td></tr>
+          )}
+          {rows.map((t, idx) => (
+            <tr key={t.roster_id}>
+              <td>{idx + 1}</td>
+              <td>{t.custom_team_name}</td>
+              <td>{t.manager_name}</td>
+              <td>{t.projected?.toFixed(1) ?? "—"}</td>
+              <td>{t.points.toFixed(1)}</td>
+              <td>{t.wins}-{t.losses}</td>
+              <td>...</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+</section>
+    
     </section>
   );
 }
