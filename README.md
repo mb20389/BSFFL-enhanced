@@ -38,3 +38,47 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/pages/building-your-application/deploying) for more details.
+
+## 🏈 BSFFL Standings Behavior
+
+This project implements **All-Play Standings** for the Bus Stop Fantasy Football League (BSFFL), powered by Sleeper’s API.
+
+---
+
+### 📅 Week Definition
+- **BSFFL weeks** run **Thursday 8 PM ET → Thursday 8 PM ET**.  
+- Example: Week 1 starts at NFL Kickoff (Thursday 9/4/2025, 8 PM ET) and ends the following Thursday at 8 PM ET.  
+- This ensures Thursday Night Football is always included in the correct scoring week.
+
+---
+
+### 📊 Weekly View
+- Polls every **60 seconds** by default (`POLL_MS` env var).  
+- Pulls:
+  - **Live scores** from `/api/scores?week={wk}`.
+  - **Projections** from `/api/projections?week={wk}` (half-PPR format).
+- **Projections**:
+  - Show non-zero values only while games are in progress.
+  - Reset to `0` once a week has fully ended.
+- Includes lineup expand/collapse with player points.
+
+---
+
+### 📈 Season View
+- Aggregates **all-play standings** across completed weeks.  
+- Shows:
+  - Total Wins / Losses.
+  - Total Points.
+  - High Weeks / Low Weeks → **only count weeks that have completed** (no live awards).
+  - Games Back (GB) relative to first place.
+  - Rank changes (`Δ`) compared to a prior week.
+
+- Data source: `/api/scores?week=season&maxWeek={N}`  
+  - `N` is capped at the current BSFFL week.
+
+---
+
+### ⚙️ Developer Notes
+- **`getBsfflWeek()`** in `scores.js` determines the current BSFFL week using the kickoff anchor:
+  ```js
+  const weekOneDate = "2025-09-04T20:00:00Z";
