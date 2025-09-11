@@ -49,7 +49,6 @@ export default function Home() {
 }
 
 /* -------------------- WEEKLY -------------------- */
-
 function WeeklyView() {
   const [week, setWeek] = useState(1);
   const [scores, setScores] = useState([]);
@@ -78,10 +77,7 @@ function WeeklyView() {
       try {
         const r = await fetch("/api/nfl-week");
         const wk = await r.json();
-
-        // Ensure we always set a numeric week (fallback to 1)
         setWeek(Number(wk?.bsfflWeek) || 1);
-
         if (Array.isArray(wk?.weeksArrayAll)) {
           setWeeksList(wk.weeksArrayAll);
         }
@@ -112,15 +108,14 @@ function WeeklyView() {
         projRes.ok ? projRes.json() : Promise.resolve([]),
       ]);
 
-      // ✅ handle both array and object with rows
-if (Array.isArray(scoresJson)) {
-  setScores(scoresJson);
-} else if (Array.isArray(scoresJson?.rows)) {
-  setScores(scoresJson.rows);
-} else {
-  setScores([]);
-}
-      
+      if (Array.isArray(scoresJson)) {
+        setScores(scoresJson);
+      } else if (Array.isArray(scoresJson?.rows)) {
+        setScores(scoresJson.rows);
+      } else {
+        setScores([]);
+      }
+
       const nextProj = {};
       (Array.isArray(projJson) ? projJson : []).forEach((p) => {
         nextProj[String(p.roster_id)] = Number(p.projected_points || 0);
@@ -263,52 +258,104 @@ if (Array.isArray(scoresJson)) {
           <small className="muted">{lastUpdated ? `Last updated: ${lastUpdated.toLocaleTimeString()}` : ""}</small>
         </div>
       </div>
-<section>
-  <div className="panel">
-    ...
-  </div>
 
-  {loading ? (
-    <p className="muted">Loading scores…</p>
-  ) : (
-    <div className="table-wrap card">
-      <table className="table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Team</th>
-            <th>Manager</th>
-            <th>Proj</th>
-            <th>Points</th>
-            <th>All-Play</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {scores.length === 0 && (
-            <tr><td colSpan={7}>No scores found.</td></tr>
-          )}
-          {rows.map((t, idx) => (
-            <tr key={t.roster_id}>
-              <td>{idx + 1}</td>
-              <td>{t.custom_team_name}</td>
-              <td>{t.manager_name}</td>
-              <td>{t.projected?.toFixed(1) ?? "—"}</td>
-              <td>{t.points.toFixed(1)}</td>
-              <td>{t.wins}-{t.losses}</td>
-              <td>...</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )}
-</section>
-    
+      {loading ? (
+        <p className="muted">Loading scores…</p>
+      ) : (
+        <div className="table-wrap card">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Team</th>
+                <th>Proj</th>
+                <th>Points</th>
+                <th>All-Play</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 && (
+                <tr><td colSpan={6}>No scores found.</td></tr>
+              )}
+              {rows.map((t, idx) => {
+                const isOpen = openRoster === t.roster_id;
+                const lineup = lineups[t.roster_id]?.starters || [];
+                return (
+                  <React.Fragment key={t.roster_id}>
+                    <tr>
+                      <td>{idx + 1}</td>
+                      <td>
+                        <div className="cell-team">
+                          {t.avatar && (
+                            <img className="avatar" src={t.avatar} alt={t.custom_team_name || t.sleeper_display_name} />
+                          )}
+                          <div>
+                            <div className="team-name">{t.custom_team_name || t.sleeper_display_name || `Roster ${t.roster_id}`}</div>
+                            <div className="muted small">{t.manager_name || "—"}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td>{t.projected?.toFixed(1) ?? "—"}</td>
+                      <td>{t.points.toFixed(1)}</td>
+                      <td>{t.wins}-{t.losses}</td>
+                      <td>
+                        <button onClick={() => toggleRoster(t.roster_id)} className={`btn ${isOpen ? "btn-dark" : "btn-light"}`}>
+                          {isOpen ? "Hide lineup" : "View lineup"}
+                        </button>
+                      </td>
+                    </tr>
+                    {isOpen && (
+                      <tr>
+                        <td colSpan={6} className="expand-cell">
+                          {lineup.length === 0 ? (
+                            <div>Loading lineup…</div>
+                          ) : (
+                            <div className="table-wrap inner">
+                              <table className="table">
+                                <thead>
+                                  <tr>
+                                    <th>#</th>
+                                    <th>Player</th>
+                                    <th>Pos</th>
+                                    <th>Team</th>
+                                    <th className="align-right">Points</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {lineup.map((p, i) => (
+                                    <tr key={p.id}>
+                                      <td>{i + 1}</td>
+                                      <td>
+                                        <div className="cell-team">
+                                          {p.headshot && <img className="headshot" src={p.headshot} alt={p.name} />}
+                                          <span className="player-name">{p.name}</span>
+                                        </div>
+                                      </td>
+                                      <td>{p.pos || "—"}</td>
+                                      <td>{p.team || "—"}</td>
+                                      <td className="align-right">{p.points.toFixed(1)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }
 
+    
 /* -------------------- SEASON -------------------- */
 
 function SeasonView() {
