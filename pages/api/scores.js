@@ -63,13 +63,13 @@ function enrichWeeklyRows(matchups, users, rosters) {
 }
 
 // Accumulate season (all-play) and compute high/low weeks
-function accumulateSeason(allWeeks, users, rosters) {
+function accumulateSeason(allWeeks, users, rosters, bsfflWeek) {
   const byOwner = new Map(users.map((u) => [u.user_id, u]));
   const byRoster = new Map(rosters.map((r) => [String(r.roster_id), r]));
 
   const totals = new Map();
 
-  for (const { rows } of allWeeks) {
+  for (const { week, rows } of allWeeks) {
     if (!rows.length) continue;
 
     // Add up points
@@ -88,7 +88,7 @@ function accumulateSeason(allWeeks, users, rosters) {
       t.totalPoints += Number(points || 0);
     });
 
-    // Wins/losses
+    // Wins/losses (always update, even current week)
     rows.forEach(({ roster_id, points }) => {
       const pts = Number(points || 0);
       const wins = rows.filter((x) => Number(x.points || 0) < pts).length;
@@ -98,14 +98,16 @@ function accumulateSeason(allWeeks, users, rosters) {
       t.totalLosses += losses;
     });
 
-    // High/low
-    const maxPts = Math.max(...rows.map((r) => Number(r.points || 0)));
-    const minPts = Math.min(...rows.map((r) => Number(r.points || 0)));
-    rows.forEach(({ roster_id, points }) => {
-      const t = totals.get(String(roster_id));
-      if (Number(points || 0) === maxPts) t.highWeeks += 1;
-      if (Number(points || 0) === minPts) t.lowWeeks += 1;
-    });
+    // High/low — only for *completed* weeks
+    if (week < bsfflWeek) {
+      const maxPts = Math.max(...rows.map((r) => Number(r.points || 0)));
+      const minPts = Math.min(...rows.map((r) => Number(r.points || 0)));
+      rows.forEach(({ roster_id, points }) => {
+        const t = totals.get(String(roster_id));
+        if (Number(points || 0) === maxPts) t.highWeeks += 1;
+        if (Number(points || 0) === minPts) t.lowWeeks += 1;
+      });
+    }
   }
 
   const out = Array.from(totals.entries()).map(([roster_id, t]) => {
@@ -211,7 +213,7 @@ export default async function handler(req, res) {
       }
     }
 
-    const seasonRows = accumulateSeason(allWeeks, users, rosters);
+    const seasonRows = accumulateSeason(allWeeks, users, rosters, bsfflWeek);
     const payload = { bsfflWeek, seasonRows };
 
     cache.set(cacheKey, payload, 60 * 30); // 30 min
