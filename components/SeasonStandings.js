@@ -39,13 +39,14 @@ export default function SeasonStandings() {
                 <th style={{ padding: 8 }}>Manager</th>
                 <th style={{ padding: 8 }}>W</th>
                 <th style={{ padding: 8 }}>L</th>
+                <th style={{ padding: 8 }}>T</th> {/* NEW */}
                 <th style={{ padding: 8 }}>Total Points</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{ padding: 12 }}>No season data yet.</td>
+                  <td colSpan={7} style={{ padding: 12 }}>No season data yet.</td>
                 </tr>
               )}
               {rows.map((r, idx) => (
@@ -64,6 +65,7 @@ export default function SeasonStandings() {
                   <td style={{ padding: 8 }}>{r.manager_name || "—"}</td>
                   <td style={{ padding: 8 }}>{r.totalWins}</td>
                   <td style={{ padding: 8 }}>{r.totalLosses}</td>
+                  <td style={{ padding: 8 }}>{r.totalTies || 0}</td> {/* NEW */}
                   <td style={{ padding: 8 }}>{Number(r.totalPoints || 0).toFixed(1)}</td>
                 </tr>
               ))}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import "/styles/styles.css"; // We'll create this in a moment
 
 export default function Home() {
@@ -162,16 +162,21 @@ function WeeklyView() {
       const pts = Number(t.points || 0);
       const wins = scores.filter((o) => Number(o.points || 0) < pts).length;
       const losses = scores.filter((o) => Number(o.points || 0) > pts).length;
+      // Count equal points as ties, excluding the team itself
+      const equalsCount = scores.filter((o) => Number(o.points || 0) === pts).length;
+      const ties = Math.max(0, equalsCount - 1);
+
       const projected = projections[String(t.roster_id)];
       const delta = projDeltas[String(t.roster_id)] || 0;
       return {
         ...t,
         wins,
         losses,
+        ties, // NEW
         isHighest: pts === max,
         isLowest: pts === min,
-        projected: projected != null ? Number(projected) : null,
-        projDelta: projected != null ? Number(delta) : 0,
+        projected,
+        delta,
       };
     });
   }, [scores, projections, projDeltas]);
@@ -251,7 +256,8 @@ function SeasonView() {
     const fetchSeason = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/scores?week=season&maxWeek=14`);
+        // Use the dedicated season API which now includes totalTies
+        const res = await fetch(`/api/season`);
         const data = await res.json();
         setSeason(Array.isArray(data) ? data : []);
       } catch (e) {
@@ -279,15 +285,22 @@ function SeasonView() {
                 <th>Manager</th>
                 <th>Total Wins</th>
                 <th>Total Losses</th>
+                <th>Total Ties</th>
                 <th>Total Points</th>
               </tr>
             </thead>
             <tbody>
               {season.length === 0 && (
-                <tr><td colSpan={6} style={{ padding: 12 }}>Season totals not available yet.</td></tr>
+                <tr><td colSpan={7} style={{ padding: 12 }}>Season totals not available yet.</td></tr>
               )}
               {season
-                .sort((a, b) => b.totalWins - a.totalWins || b.totalPoints - a.totalPoints)
+                // Sort by all-play result: wins + 0.5 * ties, then total points
+                .sort((a, b) => {
+                  const aScore = (a.totalWins || 0) + ((a.totalTies || 0) * 0.5);
+                  const bScore = (b.totalWins || 0) + ((b.totalTies || 0) * 0.5);
+                  if (bScore !== aScore) return bScore - aScore;
+                  return (b.totalPoints || 0) - (a.totalPoints || 0);
+                })
                 .map((s, idx) => (
                   <React.Fragment key={s.roster_id}>
                     <tr>
@@ -305,6 +318,7 @@ function SeasonView() {
                       <td>{s.manager_name || "—"}</td>
                       <td>{s.totalWins}</td>
                       <td>{s.totalLosses}</td>
+                      <td>{s.totalTies || 0}</td>
                       <td>{Number(s.totalPoints || 0).toFixed(1)}</td>
                     </tr>
                   </React.Fragment>
