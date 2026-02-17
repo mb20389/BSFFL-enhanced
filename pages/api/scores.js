@@ -89,10 +89,32 @@ function accumulateSeason(allWeeks, users, rosters, bsfflWeek) {
     });
 
     // Wins/losses (always update, even current week)
+    const pointsFrequency = new Map();
+    rows.forEach(({ points }) => {
+      const pts = Number(points || 0);
+      pointsFrequency.set(pts, (pointsFrequency.get(pts) || 0) + 1);
+    });
+
+    const uniquePointsDesc = Array.from(pointsFrequency.keys()).sort((a, b) => b - a);
+    const higherCountByPoints = new Map();
+    let teamsAbove = 0;
+    uniquePointsDesc.forEach((pts) => {
+      higherCountByPoints.set(pts, teamsAbove);
+      teamsAbove += pointsFrequency.get(pts) || 0;
+    });
+
+    const lowerCountByPoints = new Map();
+    const totalTeams = rows.length;
+    uniquePointsDesc.forEach((pts) => {
+      const equalCount = pointsFrequency.get(pts) || 0;
+      const higherCount = higherCountByPoints.get(pts) || 0;
+      lowerCountByPoints.set(pts, totalTeams - higherCount - equalCount);
+    });
+
     rows.forEach(({ roster_id, points }) => {
       const pts = Number(points || 0);
-      const wins = rows.filter((x) => Number(x.points || 0) < pts).length;
-      const losses = rows.filter((x) => Number(x.points || 0) > pts).length;
+      const wins = lowerCountByPoints.get(pts) || 0;
+      const losses = higherCountByPoints.get(pts) || 0;
       const t = totals.get(String(roster_id));
       t.totalWins += wins;
       t.totalLosses += losses;
