@@ -48,6 +48,45 @@ export default function Home() {
   );
 }
 
+function buildAllPlayRecord(scores = []) {
+  const pointsByRoster = scores.map((s) => ({
+    roster_id: s.roster_id,
+    points: Number(s.points || 0),
+  }));
+
+  const totalTeams = pointsByRoster.length;
+  const pointFrequency = new Map();
+  pointsByRoster.forEach(({ points }) => {
+    pointFrequency.set(points, (pointFrequency.get(points) || 0) + 1);
+  });
+
+  const uniquePointsDesc = Array.from(pointFrequency.keys()).sort((a, b) => b - a);
+
+  const higherCountByPoints = new Map();
+  let teamsAbove = 0;
+  uniquePointsDesc.forEach((pts) => {
+    higherCountByPoints.set(pts, teamsAbove);
+    teamsAbove += pointFrequency.get(pts) || 0;
+  });
+
+  const lowerCountByPoints = new Map();
+  uniquePointsDesc.forEach((pts) => {
+    const equalCount = pointFrequency.get(pts) || 0;
+    const higherCount = higherCountByPoints.get(pts) || 0;
+    lowerCountByPoints.set(pts, totalTeams - higherCount - equalCount);
+  });
+
+  const max = uniquePointsDesc[0] ?? 0;
+  const min = uniquePointsDesc[uniquePointsDesc.length - 1] ?? 0;
+
+  return {
+    higherCountByPoints,
+    lowerCountByPoints,
+    max,
+    min,
+  };
+}
+
 /* -------------------- WEEKLY -------------------- */
 function WeeklyView() {
   const [week, setWeek] = useState(1);
@@ -180,12 +219,12 @@ function WeeklyView() {
 
   const rowsBase = useMemo(() => {
     if (!scores.length) return [];
-    const max = Math.max(...scores.map((s) => Number(s.points || 0)));
-    const min = Math.min(...scores.map((s) => Number(s.points || 0)));
+    const { higherCountByPoints, lowerCountByPoints, max, min } = buildAllPlayRecord(scores);
+
     return scores.map((t) => {
       const pts = Number(t.points || 0);
-      const wins = scores.filter((o) => Number(o.points || 0) < pts).length;
-      const losses = scores.filter((o) => Number(o.points || 0) > pts).length;
+      const wins = lowerCountByPoints.get(pts) || 0;
+      const losses = higherCountByPoints.get(pts) || 0;
       const projected = projections[String(t.roster_id)];
       const delta = projDeltas[String(t.roster_id)] || 0;
       return {
@@ -288,7 +327,7 @@ function WeeklyView() {
                       <td>
                         <div className="cell-team">
                           {t.avatar && (
-                            <img className="avatar" src={t.avatar} alt={t.custom_team_name || t.sleeper_display_name} />
+                            <img className="avatar" src={t.avatar} alt={t.custom_team_name || t.sleeper_display_name} loading="lazy" decoding="async" />
                           )}
                           <div>
                             <div className="team-name">{t.custom_team_name || t.sleeper_display_name || `Roster ${t.roster_id}`}</div>
@@ -328,7 +367,7 @@ function WeeklyView() {
                                       <td>{i + 1}</td>
                                       <td>
                                         <div className="cell-team">
-                                          {p.headshot && <img className="headshot" src={p.headshot} alt={p.name} />}
+                                          {p.headshot && <img className="headshot" src={p.headshot} alt={p.name} loading="lazy" decoding="async" />}
                                           <span className="player-name">{p.name}</span>
                                         </div>
                                       </td>
@@ -497,7 +536,7 @@ function SeasonView() {
                   <td>
                     <div className="cell-team">
                       {s.avatar && (
-                        <img className="avatar" src={s.avatar} alt={s.custom_team_name || s.sleeper_display_name} />
+                        <img className="avatar" src={s.avatar} alt={s.custom_team_name || s.sleeper_display_name} loading="lazy" decoding="async" />
                       )}
                       <div className="team-name">
                         {s.custom_team_name || s.sleeper_display_name || `Roster ${s.roster_id}`}
