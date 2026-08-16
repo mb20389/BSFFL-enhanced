@@ -1,5 +1,6 @@
 // pages/api/projections.js
 import NodeCache from "node-cache";
+import { resolveLeagueContextFromQuery } from "../../lib/leagues";
 
 const cache = new NodeCache({ stdTTL: 60 }); // cache 1 minute
 
@@ -10,17 +11,9 @@ async function fetchJson(url) {
   return r.json();
 }
 
-// Get league ID from query or env
-function getLeagueId(req) {
-  return (
-    req.query.leagueId ||
-    process.env.SLEEPER_LEAGUE_ID ||
-    process.env.NEXT_PUBLIC_SLEEPER_LEAGUE_ID
-  );
-}
-
 export default async function handler(req, res) {
-  const LEAGUE_ID = getLeagueId(req);
+  const config = resolveLeagueContextFromQuery(req.query);
+  const LEAGUE_ID = config.leagueId;
   const { week } = req.query;
 
   if (!LEAGUE_ID || !week) {
@@ -37,9 +30,9 @@ export default async function handler(req, res) {
       `https://api.sleeper.app/v1/league/${LEAGUE_ID}/rosters`
     );
 
-    // Step 2. Get state for current season
-    const state = await fetchJson("https://api.sleeper.app/v1/state/nfl");
-    const season = state?.season || new Date().getFullYear();
+    // Step 2. Projections belong to the league's own season, not whatever
+    // season the NFL is currently in (an archive page asks for a past year).
+    const season = config.season || new Date().getFullYear();
 
     // Step 3. Get player projections for that week
     const projData = await fetchJson(
@@ -48,7 +41,7 @@ export default async function handler(req, res) {
 
     // Build quick lookup: player_id → projected fantasy points
     const projByPlayer = new Map();
-    for (const p of projData) {
+    for (const p of Array.isArray(projData) ? projData : []) {
       if (!p?.player_id) continue;
       // Use half_ppr points, fallback to ppts if available
       const pts =
@@ -60,7 +53,7 @@ export default async function handler(req, res) {
     }
 
     // Step 4. Sum projections for each roster's starters
-    const results = rosters.map((r) => {
+    const results = (Array.isArray(rosters) ? rosters : []).map((r) => {
       const starters = Array.isArray(r.starters) ? r.starters : [];
       let projected_points = 0;
       starters.forEach((pid) => {

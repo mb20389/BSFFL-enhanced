@@ -227,3 +227,63 @@ html, body {
 /* Projection delta coloring */
 .delta-up { color: #16a34a; }   /* green-600 */
 .delta-down { color: #dc2626; } /* red-600 */
+
+.small { font-size: 12px; }
+
+/* Season chip in the page title */
+.season-chip {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  color: var(--accent-700);
+  font-size: 13px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+/* Season switcher (current season + archives) */
+.season-nav {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.season-link {
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.season-link:hover { color: var(--text); background: #f3f4f6; }
+.season-link.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Banners */
+.archive-banner,
+.notice-banner {
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+.archive-banner {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #7c2d12;
+}
+.archive-banner a { color: #9a3412; font-weight: 600; }
+.notice-banner {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e3a8a;
+}

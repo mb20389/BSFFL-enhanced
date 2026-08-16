@@ -1,12 +1,21 @@
 // pages/api/season.js
 import NodeCache from "node-cache";
+import { resolveLeagueContextFromQuery } from "../../lib/leagues";
+import { getStandingsMaxWeek } from "../../lib/weeks";
 
 const cache = new NodeCache({ stdTTL: 43200 }); // 12 hours
-const LEAGUE_ID = process.env.SLEEPER_LEAGUE_ID || process.env.NEXT_PUBLIC_SLEEPER_LEAGUE_ID;
-const MAX_WEEK = 14; // Only include weeks 1–14
 
 export default async function handler(req, res) {
-  const cacheKey = `season-${LEAGUE_ID}`;
+  const config = resolveLeagueContextFromQuery(req.query);
+  const LEAGUE_ID = config.leagueId;
+  // Regular season only (weeks 1–14 in both the 2025 and 2026 leagues)
+  const MAX_WEEK = Math.max(getStandingsMaxWeek(config), 1);
+
+  if (!LEAGUE_ID) {
+    return res.status(400).json({ error: "Missing leagueId" });
+  }
+
+  const cacheKey = `season-${LEAGUE_ID}-${MAX_WEEK}`;
   const cached = cache.get(cacheKey);
   if (cached) return res.status(200).json(cached);
 
@@ -21,6 +30,7 @@ export default async function handler(req, res) {
     for (let week = 1; week <= MAX_WEEK; week++) {
       const matchupsRes = await fetch(`https://api.sleeper.app/v1/league/${LEAGUE_ID}/matchups/${week}`);
       const matchups = await matchupsRes.json();
+      if (!Array.isArray(matchups)) continue;
 
       matchups.forEach((m) => {
         const roster = rosters.find((r) => r.roster_id === m.roster_id);

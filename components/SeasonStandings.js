@@ -1,17 +1,16 @@
 // components/SeasonStandings.js
 import { useEffect, useState } from "react";
+import { CURRENT_SEASON } from "../lib/leagues";
 
-export default function SeasonStandings() {
+export default function SeasonStandings({ season = CURRENT_SEASON }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
-  const LEAGUE_ID = process.env.NEXT_PUBLIC_SLEEPER_LEAGUE_ID || "";
 
   useEffect(() => {
-    if (!LEAGUE_ID) return;
     const load = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/season`);
+        const res = await fetch(`/api/season?season=${encodeURIComponent(season)}`);
         const data = await res.json();
         setRows(Array.isArray(data) ? data : []);
       } catch (e) {
@@ -22,7 +21,7 @@ export default function SeasonStandings() {
       }
     };
     load();
-  }, [LEAGUE_ID]);
+  }, [season]);
 
   return (
     <section style={{ marginTop: 28 }}>
