@@ -1,14 +1,12 @@
 // pages/api/users.js
 import NodeCache from "node-cache";
+import { resolveLeagueContextFromQuery } from "../../lib/leagues";
 
 const cache = new NodeCache({ stdTTL: 43200 }); // 12 hours
 
 export default async function handler(req, res) {
-  const { leagueId } = req.query;
-  const LEAGUE_ID =
-    leagueId ||
-    process.env.SLEEPER_LEAGUE_ID ||
-    process.env.NEXT_PUBLIC_SLEEPER_LEAGUE_ID;
+  const config = resolveLeagueContextFromQuery(req.query);
+  const LEAGUE_ID = config.leagueId;
 
   if (!LEAGUE_ID) {
     return res.status(400).json({ error: "Missing leagueId" });

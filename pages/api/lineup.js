@@ -1,13 +1,13 @@
 // pages/api/lineup.js
 import NodeCache from "node-cache";
+import { resolveLeagueContextFromQuery } from "../../lib/leagues";
+
 const cache = new NodeCache({ stdTTL: 12 * 60 * 60 }); // 12h
 
 export default async function handler(req, res) {
-  const { leagueId, week, rosterId } = req.query;
-  const LEAGUE_ID =
-    leagueId ||
-    process.env.SLEEPER_LEAGUE_ID ||
-    process.env.NEXT_PUBLIC_SLEEPER_LEAGUE_ID;
+  const { week, rosterId } = req.query;
+  const config = resolveLeagueContextFromQuery(req.query);
+  const LEAGUE_ID = config.leagueId;
 
   if (!LEAGUE_ID || !week || !rosterId) {
     return res.status(400).json({ error: "Missing leagueId, week, or rosterId" });
@@ -57,7 +57,13 @@ export default async function handler(req, res) {
 
     const total = Number(row.points || 0);
 
-    return res.status(200).json({ roster_id: Number(rosterId), week: Number(week), total, starters: lineup });
+    return res.status(200).json({
+      season: config.season,
+      roster_id: Number(rosterId),
+      week: Number(week),
+      total,
+      starters: lineup,
+    });
   } catch (e) {
     console.error("lineup api error:", e);
     return res.status(500).json({ error: "Failed to fetch lineup" });

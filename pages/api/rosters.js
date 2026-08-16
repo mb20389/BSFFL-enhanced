@@ -1,9 +1,17 @@
+// pages/api/rosters.js
 import NodeCache from "node-cache";
+import { resolveLeagueContextFromQuery } from "../../lib/leagues";
 
 const cache = new NodeCache({ stdTTL: 43200 }); // 12 hours
-const LEAGUE_ID = process.env.SLEEPER_LEAGUE_ID || process.env.NEXT_PUBLIC_SLEEPER_LEAGUE_ID;
 
 export default async function handler(req, res) {
+  const config = resolveLeagueContextFromQuery(req.query);
+  const LEAGUE_ID = config.leagueId;
+
+  if (!LEAGUE_ID) {
+    return res.status(400).json({ error: "Missing leagueId" });
+  }
+
   const cacheKey = `rosters-${LEAGUE_ID}`;
   const cached = cache.get(cacheKey);
   if (cached) return res.status(200).json(cached);

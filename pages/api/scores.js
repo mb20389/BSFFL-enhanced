@@ -1,26 +1,12 @@
 // pages/api/scores.js
 import NodeCache from "node-cache";
+import { resolveLeagueContextFromQuery } from "../../lib/leagues";
+import { getSeasonWeek, getStandingsMaxWeek } from "../../lib/weeks";
 
 const cache = new NodeCache({ stdTTL: 5 * 60 }); // 5 minutes default
 
-// ---- BSFFL week helper ----
-function getBsfflWeek(weekOneDate, totalWeeks = 18) {
-  const now = new Date();
-  const start = new Date(weekOneDate); // e.g. "2025-09-04T20:00:00Z"
-  if (isNaN(start.getTime())) return 0;
-
-  const diffMs = now - start;
-  if (diffMs < 0) return 0;
-
-  const weekIndex = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
-  return Math.min(weekIndex + 1, totalWeeks);
-}
-
-// helpers
-const getLeagueId = (req) =>
-  req.query.leagueId ||
-  process.env.SLEEPER_LEAGUE_ID ||
-  process.env.NEXT_PUBLIC_SLEEPER_LEAGUE_ID;
+// Archived seasons can never change, so their responses are cached hard.
+const ARCHIVED_TTL = 12 * 60 * 60; // 12 hours
 
 async function fetchJson(url) {
   const r = await fetch(url);
@@ -175,7 +161,8 @@ function accumulateSeason(allWeeks, users, rosters, bsfflWeek) {
 }
 
 export default async function handler(req, res) {
-  const LEAGUE_ID = getLeagueId(req);
+  const config = resolveLeagueContextFromQuery(req.query);
+  const LEAGUE_ID = config.leagueId;
   const { week, maxWeek } = req.query;
 
   if (!LEAGUE_ID) {
@@ -185,12 +172,12 @@ export default async function handler(req, res) {
   try {
     const isSeason = String(week).toLowerCase() === "season";
 
-    // compute BSFFL week based on kickoff date
-    const weekOneDate = "2025-09-04T20:00:00Z"; // adjust kickoff date/time
-    const bsfflWeek = getBsfflWeek(weekOneDate, 18);
+    // BSFFL week for this season (archived seasons report their final week)
+    const bsfflWeek = getSeasonWeek(config);
+    const defaultMaxWeek = Math.max(getStandingsMaxWeek(config), 1);
 
     const maxWk = isSeason
-      ? Math.min(Math.max(Number(maxWeek || bsfflWeek), 1), 50)
+      ? Math.min(Math.max(Number(maxWeek || defaultMaxWeek), 1), 50)
       : Number(week);
 
     if (!isSeason && (!maxWk || isNaN(maxWk) || maxWk < 1 || maxWk > 50)) {
@@ -215,11 +202,11 @@ export default async function handler(req, res) {
         `https://api.sleeper.app/v1/league/${LEAGUE_ID}/matchups/${maxWk}`
       );
       const enriched = enrichWeeklyRows(matchups, users, rosters);
-      cache.set(cacheKey, enriched, 60 * 5);
+      cache.set(cacheKey, enriched, config.archived ? ARCHIVED_TTL : 60 * 5);
       return res.status(200).json(enriched);
     }
 
-    // season aggregation 1..maxWk (capped at bsfflWeek)
+    // season aggregation 1..maxWk (capped at the end of the regular season)
     const allWeeks = [];
     for (let w = 1; w <= maxWk; w++) {
       try {
@@ -236,9 +223,9 @@ export default async function handler(req, res) {
     }
 
     const seasonRows = accumulateSeason(allWeeks, users, rosters, bsfflWeek);
-    const payload = { bsfflWeek, seasonRows };
+    const payload = { season: config.season, leagueId: LEAGUE_ID, bsfflWeek, maxWeek: maxWk, seasonRows };
 
-    cache.set(cacheKey, payload, 60 * 30); // 30 min
+    cache.set(cacheKey, payload, config.archived ? ARCHIVED_TTL : 60 * 30);
     return res.status(200).json(payload);
   } catch (err) {
     console.error("scores api error:", err);
