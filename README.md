@@ -45,7 +45,7 @@ This project implements **All-Play Standings** for the league, powered by Sleepe
 
 | Season | League | Sleeper league ID | Page |
 | --- | --- | --- | --- |
-| 2026 (current) | SDFFL | `1389754614080880640` | `/` |
+| 2026 (current) | BSFFL | `1389341431096684544` | `/` |
 | 2025 (archived) | BSFFL | `1260076858616053760` | `/2025` |
 
 ---
@@ -66,7 +66,8 @@ counts, `archived` flag) plus `CURRENT_SEASON`.
 **Rolling over to a new season:**
 
 1. Add the new season to `SEASONS` in `lib/leagues.js` (league ID, name, the
-   Thursday 8 PM ET Week 1 kickoff in UTC, `archived: false`).
+   8 PM ET Week 1 kickoff in UTC, `archived: false`). If the season opens on a
+   day other than Thursday, also set `weekTwoDate` — see Week Definition below.
 2. Point `CURRENT_SEASON` at it — `/` follows automatically.
 3. Mark the outgoing season `archived: true`.
 4. Copy `pages/2025.js` to `pages/<year>.js` for the outgoing season. That page is
@@ -81,11 +82,20 @@ data can never change.
 
 ### 📅 Week Definition
 - **League weeks** run **Thursday 8 PM ET → Thursday 8 PM ET**.
-- Week 1 starts at NFL Kickoff (Thursday 9/10/2026, 8 PM ET for the 2026 season)
-  and ends the following Thursday at 8 PM ET.
 - This ensures Thursday Night Football is always included in the correct scoring week.
+- **When the season doesn’t open on a Thursday, Week 1 runs long** rather than
+  shifting every later week off Thursday. 2026 opens with a **Wednesday night game
+  on 9/9**, so:
+  - Week 1: Wed 9/9 8 PM ET → Thu 9/17 8 PM ET (8 days)
+  - Week 2 onward: Thursday 8 PM ET → Thursday 8 PM ET as usual
+  - This is configured per season with `weekOneDate` (when Week 1 begins) and the
+    optional `weekTwoDate` (where the Thursday cadence resumes). Omit `weekTwoDate`
+    for a normal Thursday opener, as in 2025.
 - Before Week 1 kicks off the week is `0`, and the UI says the season hasn’t started
   rather than showing empty standings.
+- Weeks are fixed 7-day intervals, so after DST ends in November the boundary lands
+  at 7 PM ET instead of 8 PM ET. No games fall in that hour, so week assignment is
+  unaffected.
 
 ---
 
@@ -139,8 +149,13 @@ All routes take an optional `season` (or `leagueId`) parameter:
   so completed-week logic counts every week:
   ```js
   // lib/leagues.js
-  "2026": { leagueId: "1389754614080880640", weekOneDate: "2026-09-11T00:00:00Z", ... }
+  "2026": {
+    leagueId: "1389341431096684544",
+    weekOneDate: "2026-09-10T00:00:00Z", // Wed 9/9, 8 PM ET
+    weekTwoDate: "2026-09-18T00:00:00Z", // Thu 9/17, 8 PM ET
+    ...
+  }
   ```
-  (September is EDT, so Thursday 8 PM ET is `00:00Z` the next day.)
+  (September is EDT, so 8 PM ET is `00:00Z` the next day.)
 - **`components/LeagueDashboard.js`** renders both the live and archived views; the
   page files are thin wrappers that hand it a season config.
