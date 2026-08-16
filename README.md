@@ -81,21 +81,35 @@ data can never change.
 ---
 
 ### 📅 Week Definition
-- **League weeks** run **Thursday 8 PM ET → Thursday 8 PM ET**.
-- This ensures Thursday Night Football is always included in the correct scoring week.
+
+**A week always turns over before its own first kickoff**, so the site is already
+showing week N when week N's first game starts.
+
+| Week | Turns over at | Ahead of |
+| --- | --- | --- |
+| Normal week | **Thursday 8:00 PM ET** | the 8:15 PM TNF kickoff |
+| Thanksgiving week | **Thursday 11:00 AM ET** | the 12:30 PM early game |
+| 2026 Week 1 | **Wed 9/9 8:00 PM ET** | that night's opener |
+
+- Turnovers are resolved against the **America/New_York wall clock**, not fixed
+  7-day arithmetic, so they stay at the same local time when DST ends in November
+  instead of sliding an hour earlier.
+- **Thanksgiving is detected automatically** (the fourth Thursday in November) and
+  turns over in the morning, so the noon games are scored in the right week rather
+  than the site sitting on the previous week until 8 PM. `earlyTurnoverDates` in a
+  season's config forces the same early turnover on any other `YYYY-MM-DD` whose
+  week opens with a daytime game.
 - **When the season doesn’t open on a Thursday, Week 1 runs long** rather than
   shifting every later week off Thursday. 2026 opens with a **Wednesday night game
   on 9/9**, so:
   - Week 1: Wed 9/9 8 PM ET → Thu 9/17 8 PM ET (8 days)
   - Week 2 onward: Thursday 8 PM ET → Thursday 8 PM ET as usual
   - This is configured per season with `weekOneDate` (when Week 1 begins) and the
-    optional `weekTwoDate` (where the Thursday cadence resumes). Omit `weekTwoDate`
-    for a normal Thursday opener, as in 2025.
+    optional `weekTwoDate` (where the Thursday cadence resumes, which also sets the
+    weekday and time of every later turnover). Omit `weekTwoDate` for a normal
+    Thursday opener, as in 2025.
 - Before Week 1 kicks off the week is `0`, and the UI says the season hasn’t started
   rather than showing empty standings.
-- Weeks are fixed 7-day intervals, so after DST ends in November the boundary lands
-  at 7 PM ET instead of 8 PM ET. No games fall in that hour, so week assignment is
-  unaffected.
 
 ---
 
