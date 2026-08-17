@@ -7,6 +7,8 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { CURRENT_SEASON, listSeasons } from "../lib/leagues";
+import { buildAllPlayRecord } from "../lib/allPlay";
+import LiveStandingsView from "./LiveStandingsView";
 
 const POLL_MS = Number(process.env.NEXT_PUBLIC_POLL_MS || 60000);
 const LINEUP_COOLDOWN_MS = 120000;
@@ -83,6 +85,16 @@ export default function LeagueDashboard({ config }) {
   const leagueName = league?.name || config.name || "League";
   const seasonStarted = weekState ? weekState.seasonStarted !== false : !isArchive;
 
+  // An archive opens on its final regular-season week; a live season opens on
+  // whatever week is currently being played.
+  const defaultWeek = isArchive
+    ? config.regularSeasonWeeks || 14
+    : Number(weekState?.bsfflWeek) || 1;
+  const defaultWeeksList = useMemo(
+    () => Array.from({ length: config.totalWeeks || 18 }, (_, i) => i + 1),
+    [config.totalWeeks]
+  );
+
   return (
     <div className="container">
       <header
@@ -138,6 +150,9 @@ export default function LeagueDashboard({ config }) {
         <button onClick={() => setActiveTab("weekly")} className={`tab-btn ${activeTab === "weekly" ? "active" : ""}`}>
           Weekly
         </button>
+        <button onClick={() => setActiveTab("live")} className={`tab-btn ${activeTab === "live" ? "active" : ""}`}>
+          Live vs Projected
+        </button>
         <button onClick={() => setActiveTab("season")} className={`tab-btn ${activeTab === "season" ? "active" : ""}`}>
           Season
         </button>
@@ -145,50 +160,18 @@ export default function LeagueDashboard({ config }) {
 
       {activeTab === "weekly" ? (
         <WeeklyView config={config} seasonStarted={seasonStarted} />
+      ) : activeTab === "live" ? (
+        <LiveStandingsView
+          config={config}
+          seasonStarted={seasonStarted}
+          defaultWeek={defaultWeek}
+          weeksList={weekState?.weeksArrayAll || defaultWeeksList}
+        />
       ) : (
         <SeasonView config={config} seasonStarted={seasonStarted} />
       )}
     </div>
   );
-}
-
-function buildAllPlayRecord(scores = []) {
-  const pointsByRoster = scores.map((s) => ({
-    roster_id: s.roster_id,
-    points: Number(s.points || 0),
-  }));
-
-  const totalTeams = pointsByRoster.length;
-  const pointFrequency = new Map();
-  pointsByRoster.forEach(({ points }) => {
-    pointFrequency.set(points, (pointFrequency.get(points) || 0) + 1);
-  });
-
-  const uniquePointsDesc = Array.from(pointFrequency.keys()).sort((a, b) => b - a);
-
-  const higherCountByPoints = new Map();
-  let teamsAbove = 0;
-  uniquePointsDesc.forEach((pts) => {
-    higherCountByPoints.set(pts, teamsAbove);
-    teamsAbove += pointFrequency.get(pts) || 0;
-  });
-
-  const lowerCountByPoints = new Map();
-  uniquePointsDesc.forEach((pts) => {
-    const equalCount = pointFrequency.get(pts) || 0;
-    const higherCount = higherCountByPoints.get(pts) || 0;
-    lowerCountByPoints.set(pts, totalTeams - higherCount - equalCount);
-  });
-
-  const max = uniquePointsDesc[0] ?? 0;
-  const min = uniquePointsDesc[uniquePointsDesc.length - 1] ?? 0;
-
-  return {
-    higherCountByPoints,
-    lowerCountByPoints,
-    max,
-    min,
-  };
 }
 
 /* -------------------- WEEKLY -------------------- */

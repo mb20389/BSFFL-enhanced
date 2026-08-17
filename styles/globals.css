@@ -268,6 +268,48 @@ html, body {
   color: #fff;
 }
 
+/* Live vs projected chart */
+.chart-block { padding: 4px 4px 8px; }
+.chart-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 6px 4px 10px;
+}
+.chart-title { font-weight: 700; }
+.chart-sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.chart-legend { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.chart-scroll { width: 100%; overflow-x: auto; }
+.chart-scroll svg g { cursor: default; }
+.chart-tooltip {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  min-height: 37px;
+}
+.chart-tooltip-empty { color: var(--muted); }
+
 /* Banners */
 .archive-banner,
 .notice-banner {

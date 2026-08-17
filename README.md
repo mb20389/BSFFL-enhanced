@@ -85,29 +85,29 @@ data can never change.
 **A week always turns over before its own first kickoff**, so the site is already
 showing week N when week N's first game starts.
 
-| Week | Turns over at | Ahead of |
-| --- | --- | --- |
-| Normal week | **Thursday 8:00 PM ET** | the 8:15 PM TNF kickoff |
-| Thanksgiving week | **Thursday 11:00 AM ET** | the 12:30 PM early game |
-| 2026 Week 1 | **Wed 9/9 8:00 PM ET** | that night's opener |
+**The NFL schedule decides when**, rather than a hand-maintained calendar rule.
+Each week turns over on the date of its own first game (`lib/scheduleWeeks.js`):
 
-- Turnovers are resolved against the **America/New_York wall clock**, not fixed
-  7-day arithmetic, so they stay at the same local time when DST ends in November
-  instead of sliding an hour earlier.
-- **Thanksgiving is detected automatically** (the fourth Thursday in November) and
-  turns over in the morning, so the noon games are scored in the right week rather
-  than the site sitting on the previous week until 8 PM. `earlyTurnoverDates` in a
-  season's config forces the same early turnover on any other `YYYY-MM-DD` whose
-  week opens with a daytime game.
-- **When the season doesn’t open on a Thursday, Week 1 runs long** rather than
-  shifting every later week off Thursday. 2026 opens with a **Wednesday night game
-  on 9/9**, so:
-  - Week 1: Wed 9/9 8 PM ET → Thu 9/17 8 PM ET (8 days)
-  - Week 2 onward: Thursday 8 PM ET → Thursday 8 PM ET as usual
-  - This is configured per season with `weekOneDate` (when Week 1 begins) and the
-    optional `weekTwoDate` (where the Thursday cadence resumes, which also sets the
-    weekday and time of every later turnover). Omit `weekTwoDate` for a normal
-    Thursday opener, as in 2025.
+| That week's first game | Turns over at | Example |
+| --- | --- | --- |
+| A standalone night game | **8:00 PM ET that day** | every normal Thursday, ahead of the 8:15 TNF kickoff |
+| A full daytime slate | **11:00 AM ET that day** | 2026 week 18, which opens on a Sunday |
+
+- The schedule feed carries dates but no kickoff times, so **the size of the first
+  slate stands in for the time**: one game that day is a prime-time kickoff, several
+  means a daytime slate starting around lunchtime.
+- This is what catches the weeks a calendar rule misses. **2026 week 12 opens with a
+  Wednesday night game on 11/25**, the day before Thanksgiving — a Thursday-anchored
+  rule scored it under week 11. Turning over Wednesday evening also puts
+  Thanksgiving's noon games in the right week.
+- Turnovers resolve against the **America/New_York wall clock**, so they hold at the
+  same local time when DST ends in November instead of sliding an hour earlier.
+- The evening anchor's weekday and time of day come from `weekTwoDate`, so a league
+  that plays by different hours edits one field.
+- **If the schedule can't be fetched, the calendar rule in `lib/weeks.js` takes over**
+  (Thursday 8 PM ET, with automatic Thanksgiving detection and `earlyTurnoverDates`),
+  so the site still knows the week when Sleeper is down. `/api/nfl-week` reports which
+  was used as `weekSource`, and `?debug=1` dumps every derived turnover.
 - Before Week 1 kicks off the week is `0`, and the UI says the season hasn’t started
   rather than showing empty standings.
 
@@ -118,11 +118,43 @@ showing week N when week N's first game starts.
 - Pulls:
   - **Live scores** from `/api/scores?season={yr}&week={wk}`.
   - **Projections** from `/api/projections?season={yr}&week={wk}` (half-PPR format).
-- **Projections**:
-  - Show non-zero values only while games are in progress.
-  - Reset to `0` once a week has fully ended.
-  - Hidden entirely on archive pages.
+- Projections are live projected finals (see below); the column is hidden on archives.
 - Includes lineup expand/collapse with player points.
+
+---
+
+### 🔴 Live vs Projected View
+
+A dumbbell chart plus table showing, for every team, its all-play record **right
+now** against its **projected final** — so you can see the ground about to move
+while games are being played. It refreshes on the same 60s poll and stops polling
+once every game is final.
+
+**Live projections are not a sum of Sleeper's projections.** Sleeper's weekly
+numbers are full-game figures that do not decay as a game is played, so summing
+them mid-Sunday double-counts everyone who has already finished. Each player's
+projected final is resolved from their own game's status instead
+(`lib/liveScoring.js`), joining `projections.game_id → schedule.game_id`:
+
+| Player's game | Contributes |
+| --- | --- |
+| Hasn't kicked off | their projection |
+| Final | their actual points |
+| In progress | `max(actual, projection)` |
+| No game at all (bye, inactive) | their actual points — nothing more is coming |
+
+The in-progress rule is deliberate. Sleeper's schedule feed carries a status but
+**no game clock**, so there is no honest way to decay a projection partway through
+a game. Treating the projection as a floor keeps the number monotonic — it never
+sags as a player accumulates points — and it converges on the truth as each game
+finalises. Taking the floor also covers players missing from the projections feed,
+who keep their actual points instead of silently counting as zero. If a clock
+source is added later, `projectPlayerFinal()` is the only thing that changes.
+
+> ⚠️ **Not yet observed against live games.** This shipped in the offseason, when
+> every game in the feed reads `pre_game` or `complete`. The final-week and
+> not-started paths are verified against real data; the in-progress path is covered
+> by unit assertions only. Worth a look during Week 1.
 
 ---
 
@@ -149,11 +181,18 @@ All routes take an optional `season` (or `leagueId`) parameter:
 | Route | Purpose |
 | --- | --- |
 | `/api/league` | League metadata (name, status, size, playoff week start) |
-| `/api/nfl-week` | Current NFL + league week, standings caps, `seasonStarted` |
+| `/api/nfl-week` | Current NFL + league week, standings caps, `seasonStarted`, `weekSource` (`?debug=1` dumps every turnover) |
 | `/api/scores` | `week={n}` for one week, `week=season&maxWeek={n}` for standings |
-| `/api/projections` | Half-PPR starter projections for a week |
+| `/api/live-standings` | Both all-play standings for a week — live and projected — with per-team rank delta and starters remaining |
+| `/api/projections` | Live projected final score per roster |
 | `/api/lineup` | One roster's starters and points for a week |
 | `/api/users`, `/api/rosters`, `/api/season` | Raw league data helpers |
+
+> **Projections come from the un-versioned Sleeper path**
+> (`https://api.sleeper.app/projections/nfl/{season}/{week}?season_type=regular&order_by=ppr`).
+> The `/v1/projections/...` variant still answers `200` but returns
+> `{ player_id: {} }` for every player — no stats at all — which silently produces
+> zero projections everywhere. Don't "fix" it back to `/v1/`.
 
 ---
 

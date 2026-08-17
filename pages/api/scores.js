@@ -1,7 +1,10 @@
 // pages/api/scores.js
 import NodeCache from "node-cache";
 import { resolveLeagueContextFromQuery } from "../../lib/leagues";
-import { getSeasonWeek, getStandingsMaxWeek } from "../../lib/weeks";
+import { getStandingsMaxWeek } from "../../lib/weeks";
+import { resolveSeasonWeek } from "../../lib/scheduleWeeks";
+import { buildTeamMeta } from "../../lib/teams";
+import { buildAllPlayRecord } from "../../lib/allPlay";
 
 const cache = new NodeCache({ stdTTL: 5 * 60 }); // 5 minutes default
 
@@ -15,43 +18,22 @@ async function fetchJson(url) {
 }
 
 function enrichWeeklyRows(matchups, users, rosters) {
-  const byOwner = new Map(users.map((u) => [u.user_id, u]));
-  const byRoster = new Map(rosters.map((r) => [String(r.roster_id), r]));
+  const teamMeta = buildTeamMeta(users, rosters);
 
   return (Array.isArray(matchups) ? matchups : [])
     .filter((m) => m && m.roster_id != null)
-    .map((m) => {
-      const roster = byRoster.get(String(m.roster_id));
-      const owner = roster ? byOwner.get(roster.owner_id) : null;
-
-      return {
-        roster_id: m.roster_id,
-        matchup_id: m.matchup_id ?? null,
-        points: Number(m.points || 0),
-
-        // team/manager metadata
-        sleeper_display_name: owner?.display_name || "Unknown",
-        custom_team_name:
-          owner?.metadata?.team_name ||
-          owner?.display_name ||
-          `Roster ${m.roster_id}`,
-        manager_name:
-          owner?.metadata?.team_nickname ||
-          `${owner?.metadata?.first_name || ""} ${owner?.metadata?.last_name || ""}`.trim() ||
-          owner?.display_name ||
-          null,
-        avatar: owner?.avatar
-          ? `https://sleepercdn.com/avatars/${owner.avatar}`
-          : null,
-      };
-    })
+    .map((m) => ({
+      roster_id: m.roster_id,
+      matchup_id: m.matchup_id ?? null,
+      points: Number(m.points || 0),
+      ...teamMeta(m.roster_id),
+    }))
     .sort((a, b) => b.points - a.points);
 }
 
 // Accumulate season (all-play) and compute high/low weeks
 function accumulateSeason(allWeeks, users, rosters, bsfflWeek) {
-  const byOwner = new Map(users.map((u) => [u.user_id, u]));
-  const byRoster = new Map(rosters.map((r) => [String(r.roster_id), r]));
+  const teamMeta = buildTeamMeta(users, rosters);
 
   const totals = new Map();
 
@@ -75,27 +57,8 @@ function accumulateSeason(allWeeks, users, rosters, bsfflWeek) {
     });
 
     // Wins/losses (always update, even current week)
-    const pointsFrequency = new Map();
-    rows.forEach(({ points }) => {
-      const pts = Number(points || 0);
-      pointsFrequency.set(pts, (pointsFrequency.get(pts) || 0) + 1);
-    });
-
-    const uniquePointsDesc = Array.from(pointsFrequency.keys()).sort((a, b) => b - a);
-    const higherCountByPoints = new Map();
-    let teamsAbove = 0;
-    uniquePointsDesc.forEach((pts) => {
-      higherCountByPoints.set(pts, teamsAbove);
-      teamsAbove += pointsFrequency.get(pts) || 0;
-    });
-
-    const lowerCountByPoints = new Map();
-    const totalTeams = rows.length;
-    uniquePointsDesc.forEach((pts) => {
-      const equalCount = pointsFrequency.get(pts) || 0;
-      const higherCount = higherCountByPoints.get(pts) || 0;
-      lowerCountByPoints.set(pts, totalTeams - higherCount - equalCount);
-    });
+    const { higherCountByPoints, lowerCountByPoints, max: maxPts, min: minPts } =
+      buildAllPlayRecord(rows);
 
     rows.forEach(({ roster_id, points }) => {
       const pts = Number(points || 0);
@@ -108,8 +71,6 @@ function accumulateSeason(allWeeks, users, rosters, bsfflWeek) {
 
     // High/low — only for *completed* weeks
     if (week < bsfflWeek) {
-      const maxPts = Math.max(...rows.map((r) => Number(r.points || 0)));
-      const minPts = Math.min(...rows.map((r) => Number(r.points || 0)));
       rows.forEach(({ roster_id, points }) => {
         const t = totals.get(String(roster_id));
         if (Number(points || 0) === maxPts) t.highWeeks += 1;
@@ -118,33 +79,15 @@ function accumulateSeason(allWeeks, users, rosters, bsfflWeek) {
     }
   }
 
-  const out = Array.from(totals.entries()).map(([roster_id, t]) => {
-    const roster = byRoster.get(roster_id);
-    const owner = roster ? byOwner.get(roster.owner_id) : null;
-
-    return {
-      roster_id: Number(roster_id),
-      totalPoints: t.totalPoints,
-      totalWins: t.totalWins,
-      totalLosses: t.totalLosses,
-      highWeeks: t.highWeeks,
-      lowWeeks: t.lowWeeks,
-
-      custom_team_name:
-        owner?.metadata?.team_name ||
-        owner?.display_name ||
-        `Roster ${roster_id}`,
-      sleeper_display_name: owner?.display_name || "Unknown",
-      manager_name:
-        owner?.metadata?.team_nickname ||
-        `${owner?.metadata?.first_name || ""} ${owner?.metadata?.last_name || ""}`.trim() ||
-        owner?.display_name ||
-        null,
-      avatar: owner?.avatar
-        ? `https://sleepercdn.com/avatars/${owner.avatar}`
-        : null,
-    };
-  });
+  const out = Array.from(totals.entries()).map(([roster_id, t]) => ({
+    roster_id: Number(roster_id),
+    totalPoints: t.totalPoints,
+    totalWins: t.totalWins,
+    totalLosses: t.totalLosses,
+    highWeeks: t.highWeeks,
+    lowWeeks: t.lowWeeks,
+    ...teamMeta(roster_id),
+  }));
 
   out.sort((a, b) => b.totalWins - a.totalWins || b.totalPoints - a.totalPoints);
 
@@ -172,8 +115,9 @@ export default async function handler(req, res) {
   try {
     const isSeason = String(week).toLowerCase() === "season";
 
-    // BSFFL week for this season (archived seasons report their final week)
-    const bsfflWeek = getSeasonWeek(config);
+    // BSFFL week for this season (archived seasons report their final week).
+    // Only the season rollup needs it, to decide which weeks are complete.
+    const bsfflWeek = isSeason ? (await resolveSeasonWeek(config)).week : 0;
     const defaultMaxWeek = Math.max(getStandingsMaxWeek(config), 1);
 
     const maxWk = isSeason
