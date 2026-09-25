@@ -238,10 +238,13 @@ playoff odds moved, recent hot and cold runs, and a link to the site.
 
 - **Numbers** come from the same code as the site (`lib/recap/data.js` reuses
   `lib/seasonOdds.js`), so the odds in the email match `/playoffs` exactly.
-- **Write-up** is by Claude (`lib/recap/narrative.js`), told to use only the data
-  it's given. If the API key is missing or the call fails, the email still goes
-  out with short factual sentences instead.
-- **Sending** is through [Resend](https://resend.com), one copy per recipient.
+- **Write-up** is by Claude (`lib/recap/narrative.js`) as broadcast-booth banter
+  between Cotton McKnight (play-by-play) and Pepper Brooks (color) from
+  *Dodgeball*, told to use only the data it's given. If the API key is missing
+  or the call fails, the email still goes out with Cotton reading the plain
+  facts and a stock Pepper line.
+- **Sending** is from a Gmail account via SMTP (nodemailer), one copy per
+  recipient. A personal Gmail account can send to about 500 recipients a day.
 - **Schedule:** `vercel.json` runs `/api/cron/weekly-recap` at 10:00 and 11:00
   UTC on Tuesdays; the route only proceeds when it's 6 AM Eastern, so the send
   time survives the DST change. Only regular-season weeks (1–14) are recapped.
@@ -251,8 +254,9 @@ playoff odds moved, recent hot and cold runs, and a link to the site.
 | Variable | Purpose |
 | --- | --- |
 | `CRON_SECRET` | Required. Vercel sends it to the cron route; also unlocks manual runs and previews. |
-| `RESEND_API_KEY` | Required to send. |
-| `RECAP_FROM` | Sender, e.g. `BSFFL Recap <recap@yourdomain.com>`. Defaults to Resend's test sender, which only delivers to your own Resend account email. |
+| `GMAIL_USER` | The Gmail address the recap is sent from. |
+| `GMAIL_APP_PASSWORD` | A [Google App Password](https://myaccount.google.com/apppasswords) for that account (requires 2-Step Verification). Not your normal password. |
+| `RECAP_FROM_NAME` | Display name on the email (default `BSFFL Recap`). |
 | `RECAP_TEST_RECIPIENTS` | Comma-separated test list (e.g. just you). |
 | `RECAP_RECIPIENTS` | Comma-separated league list. |
 | `RECAP_LIVE` | `true` sends Tuesday's email to the league; anything else sends it to the test list. |

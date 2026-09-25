@@ -5,7 +5,8 @@
 //
 // Vercel Cron schedules are in UTC, so vercel.json triggers it at both 10:00
 // and 11:00 UTC and this route only proceeds when it is 6 AM on the Eastern
-// clock — 10:00 UTC during daylight time, 11:00 UTC after DST ends.
+// clock — 10:00 UTC during daylight time, 11:00 UTC after DST ends. That
+// check is also what stops the second trigger from sending a duplicate.
 //
 // Scheduled runs go to the league (RECAP_RECIPIENTS) when RECAP_LIVE=true,
 // and to RECAP_TEST_RECIPIENTS otherwise.
@@ -69,10 +70,7 @@ export default async function handler(req, res) {
 
     if (req.query.dryRun === "1") return res.status(200).json({ dryRun: true, ...summary });
 
-    const result = await sendRecap(recap, recipients, {
-      audience,
-      idempotencyKey: manual ? null : `bsffl-recap-${recap.season}-w${recap.week}-${audience}`,
-    });
+    const result = await sendRecap(recap, recipients, { audience });
     console.log("weekly recap sent:", { ...summary, ...result });
     return res.status(200).json({ ...summary, ...result });
   } catch (err) {

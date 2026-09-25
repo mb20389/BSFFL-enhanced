@@ -12,6 +12,7 @@
     "@anthropic-ai/sdk": "^0.128.0",
     "next": "15.4.8",
     "node-cache": "^5.1.2",
+    "nodemailer": "^10.0.10",
     "react": "19.1.0",
     "react-dom": "19.1.0"
   },
