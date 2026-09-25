@@ -7,6 +7,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { CURRENT_SEASON, listSeasons } from "../lib/leagues";
+import SiteNav from "./SiteNav";
 
 const POLL_MS = Number(process.env.NEXT_PUBLIC_POLL_MS || 60000);
 const LINEUP_COOLDOWN_MS = 120000;
@@ -85,6 +86,7 @@ export default function LeagueDashboard({ config }) {
 
   return (
     <div className="container">
+      <SiteNav />
       <header
         className="header"
         style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}

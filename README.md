@@ -173,3 +173,40 @@ All routes take an optional `season` (or `leagueId`) parameter:
   (September is EDT, so 8 PM ET is `00:00Z` the next day.)
 - **`components/LeagueDashboard.js`** renders both the live and archived views; the
   page files are thin wrappers that hand it a season config.
+
+---
+
+## 🤝 Rivalries (`/rivalries`)
+
+"What-if" head-to-head records between every pair of managers. Every week, each
+manager's score is compared with every other manager's score (the same comparison
+behind all-play); a manager's record against a rival is how many weeks they
+outscored that rival.
+
+- Keyed by Sleeper **user ID**, so rivalries follow the manager across seasons.
+- Counts only **completed regular-season weeks** (live weeks never move the numbers).
+- Covers every season in `lib/leagues.js` automatically — add a season there and it
+  shows up in the Seasons filter.
+- Two views: **By manager** (record, win %, avg margin, biggest win / worst loss vs.
+  each opponent) and **League grid** (16×16 win % heatmap, sorted by overall record).
+- The selected manager, view and seasons are in the URL, so a rivalry can be shared
+  as a link: `/rivalries?manager=<sleeper user id>&seasons=2025`.
+- Data: `/api/rivalries`.
+
+## 🎲 Playoff odds (`/playoffs`)
+
+Monte Carlo playoff odds using BSFFL rules: **top 8 in all-play** make it, **total
+points** break ties, seeded straight down that order (1 v 8, 2 v 7…).
+
+- Completed weeks are real results; the remaining regular-season weeks are simulated
+  10,000 times (`?sims=` accepts 1,000–50,000).
+- Each team's weekly scoring average is shrunk toward the league average early in
+  the season (`PRIOR_WEEKS` in `lib/playoffOdds.js`), and each simulation also varies
+  how good each team "really" is, so early-season odds stay appropriately humble.
+- Seeded random numbers: the odds only change when a week becomes final.
+- **Clinched / Eliminated** badges appear only when mathematically certain.
+- Shows playoff %, top-4 %, #1-seed %, projected record, and a seed-by-seed chance strip.
+- Back-tested on 2025: better than "current top 8 are locks" at every checkpoint.
+- Data: `/api/playoff-odds?season=2026`. Page follows `CURRENT_SEASON`.
+
+Shared Sleeper fetching/caching for both lives in `lib/sleeper.js`.
