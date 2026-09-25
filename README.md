@@ -207,6 +207,23 @@ points** break ties, seeded straight down that order (1 v 8, 2 v 7…).
 - **Clinched / Eliminated** badges appear only when mathematically certain.
 - Shows playoff %, top-4 %, #1-seed %, projected record, and a seed-by-seed chance strip.
 - Back-tested on 2025: better than "current top 8 are locks" at every checkpoint.
-- Data: `/api/playoff-odds?season=2026`. Page follows `CURRENT_SEASON`.
+- Data: `/api/playoff-odds?season=2026`. Page follows `CURRENT_SEASON`;
+  `/playoffs?season=2025` shows an earlier season.
+
+### 📉 Odds history chart
+
+Above the odds table, a line chart shows how every team's odds moved week by week
+(point *k* = the odds as they stood once week *k* was final; "Pre" = everyone even).
+
+- Switch between **Make playoffs**, **Top 4** and **#1 seed**.
+- All teams draw as faint lines; hover to preview, click a line, chip, or table row to
+  pin up to 6 teams in color. It opens on the latest week's biggest riser and faller.
+- The x-axis spans the full regular season, so an in-progress season shows the weeks
+  still to play.
+- Plain SVG — no chart library.
+- Data: `/api/playoff-odds-history?season=2026`. The table and chart share
+  `lib/seasonOdds.js`, so the chart's latest point always matches the table. Each
+  finished week's odds are cached (they can never change); a full 14-week season takes
+  ~2 s to compute from cold.
 
 Shared Sleeper fetching/caching for both lives in `lib/sleeper.js`.

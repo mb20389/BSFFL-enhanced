@@ -3,6 +3,7 @@
 // Simulated playoff odds for the current season, from /api/playoff-odds.
 
 import React, { useEffect, useMemo, useState } from "react";
+import OddsHistoryChart, { SERIES_COLORS } from "./OddsHistoryChart";
 
 function pct(p) {
   if (p == null) return "—";
@@ -12,6 +13,25 @@ function pct(p) {
   if (v > 99.9) return ">99.9%";
   if (v < 0.1) return "<0.1%";
   return `${v.toFixed(v >= 10 ? 0 : 1)}%`;
+}
+
+/** Biggest rise and fall in playoff odds over the most recent completed week. */
+function biggestMovers(history) {
+  if (!history || history.weeks.length < 2) return { up: null, down: null };
+  const last = history.weeks.length - 1;
+  const moves = history.teams.map((t) => ({
+    t,
+    delta: t.playoffPct[last] - t.playoffPct[last - 1],
+  }));
+  moves.sort((a, b) => b.delta - a.delta);
+  const up = moves[0]?.delta > 0.005 ? moves[0] : null;
+  const down = moves[moves.length - 1]?.delta < -0.005 ? moves[moves.length - 1] : null;
+  return { up, down, week: history.weeks[last] };
+}
+
+function points(delta) {
+  const v = Math.round(Math.abs(delta) * 100);
+  return `${delta >= 0 ? "+" : "−"}${v} pts`;
 }
 
 function projRecord(t) {
@@ -40,13 +60,24 @@ function SeedStrip({ dist, playoffTeams, teamName }) {
 
 export default function PlayoffOddsView({ config }) {
   const [data, setData] = useState(null);
+  const [history, setHistory] = useState(null);
   const [error, setError] = useState(null);
+  // Pinned teams on the chart, and the color slot each one holds.
+  const [selected, setSelected] = useState([]);
+  const [colorSlots, setColorSlots] = useState({});
 
   useEffect(() => {
     let cancelled = false;
+    setData(null);
+    setHistory(null);
+    setError(null);
+    setSelected([]);
+    setColorSlots({});
+
+    const q = `season=${encodeURIComponent(config.season)}`;
     const load = async () => {
       try {
-        const r = await fetch(`/api/playoff-odds?season=${encodeURIComponent(config.season)}`);
+        const r = await fetch(`/api/playoff-odds?${q}`);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const json = await r.json();
         if (!cancelled) setData(json);
@@ -54,12 +85,51 @@ export default function PlayoffOddsView({ config }) {
         console.error("Failed to load playoff odds", e);
         if (!cancelled) setError("Playoff odds couldn't be loaded from Sleeper. Refresh the page to try again.");
       }
+      // The chart is a bonus: if it fails, the table still stands on its own.
+      try {
+        const r = await fetch(`/api/playoff-odds-history?${q}`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const json = await r.json();
+        if (!cancelled) setHistory(json);
+      } catch (e) {
+        console.error("Failed to load playoff odds history", e);
+      }
     };
     load();
     return () => {
       cancelled = true;
     };
   }, [config.season]);
+
+  const movers = useMemo(() => biggestMovers(history), [history]);
+
+  // Start the chart on this week's biggest riser and faller.
+  useEffect(() => {
+    if (!history) return;
+    const initial = [movers.up?.t.roster_id, movers.down?.t.roster_id].filter((id) => id != null);
+    setSelected(initial);
+    setColorSlots(Object.fromEntries(initial.map((id, i) => [id, i])));
+  }, [history, movers]);
+
+  const toggleTeam = (id) => {
+    if (selected.includes(id)) {
+      const nextSlots = { ...colorSlots };
+      delete nextSlots[id];
+      setSelected(selected.filter((x) => x !== id));
+      setColorSlots(nextSlots);
+      return;
+    }
+    // At the limit, the earliest pick makes room for the new one.
+    const kept = selected.length >= SERIES_COLORS.length ? selected.slice(1) : selected;
+    const nextSlots = Object.fromEntries(kept.map((k) => [k, colorSlots[k]]));
+    const used = new Set(Object.values(nextSlots));
+    const free = SERIES_COLORS.findIndex((_, i) => !used.has(i));
+    nextSlots[id] = free === -1 ? 0 : free;
+    setSelected([...kept, id]);
+    setColorSlots(nextSlots);
+  };
+
+  const colorOf = (id) => (colorSlots[id] != null ? SERIES_COLORS[colorSlots[id]] : null);
 
   const rows = useMemo(() => {
     const teams = data?.teams || [];
@@ -97,9 +167,35 @@ export default function PlayoffOddsView({ config }) {
               </>
             )}
           </div>
-          <small className="muted">Updates when each week is final</small>
+          {!done && <small className="muted">Updates when each week is final</small>}
         </div>
       </div>
+
+      {(movers.up || movers.down) && (
+        <div className="movers">
+          <span className="muted">After Week {movers.week}:</span>
+          {movers.up && (
+            <button className="mover up" onClick={() => toggleTeam(movers.up.t.roster_id)}>
+              <span className="delta-up">▲ {points(movers.up.delta)}</span> {movers.up.t.custom_team_name}
+            </button>
+          )}
+          {movers.down && (
+            <button className="mover down" onClick={() => toggleTeam(movers.down.t.roster_id)}>
+              <span className="delta-down">▼ {points(movers.down.delta)}</span> {movers.down.t.custom_team_name}
+            </button>
+          )}
+        </div>
+      )}
+
+      {history && history.weeks.length > 1 && (
+        <OddsHistoryChart
+          history={history}
+          regularSeasonWeeks={data.regularSeasonWeeks}
+          selected={selected}
+          colorOf={colorOf}
+          onToggle={toggleTeam}
+        />
+      )}
 
       <div className="table-wrap card">
         <table className="table odds-table">
@@ -131,19 +227,29 @@ export default function PlayoffOddsView({ config }) {
                 <tr>
                   <td>{t.currentRank}</td>
                   <td>
-                    <div className="cell-team">
+                    <button
+                      className="cell-team team-toggle"
+                      onClick={() => toggleTeam(t.roster_id)}
+                      aria-pressed={selected.includes(t.roster_id)}
+                      title={selected.includes(t.roster_id) ? "Remove from chart" : "Show on chart"}
+                    >
                       {t.avatar && (
                         <img className="avatar" src={t.avatar} alt="" loading="lazy" decoding="async" />
                       )}
                       <div>
-                        <div className="team-name">{t.custom_team_name}</div>
+                        <div className="team-name">
+                          {selected.includes(t.roster_id) && (
+                            <span className="chart-dot" style={{ background: colorOf(t.roster_id) }} />
+                          )}
+                          {t.custom_team_name}
+                        </div>
                         <div className="muted small">
                           {t.manager_name || t.sleeper_display_name}
                           {t.status === "clinched" && <span className="status-badge clinched">Clinched</span>}
                           {t.status === "eliminated" && <span className="status-badge eliminated">Eliminated</span>}
                         </div>
                       </div>
-                    </div>
+                    </button>
                   </td>
                   <td>
                     <div className="pct-bar" style={{ "--w": `${t.playoffPct * 100}%` }}>
