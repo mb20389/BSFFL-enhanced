@@ -227,3 +227,43 @@ Above the odds table, a line chart shows how every team's odds moved week by wee
   ~2 s to compute from cold.
 
 Shared Sleeper fetching/caching for both lives in `lib/sleeper.js`.
+
+## 📧 Weekly recap email (Tuesdays, 6 AM ET)
+
+An automated recap of the week that just ended, built on all-play results:
+week and season all-play standings, the top and bottom scores (the players who
+drove them, and for the bottom score the lineup decisions behind it: points
+left on the bench, who should have started, empty or bye-week starters), whose
+playoff odds moved, recent hot and cold runs, and a link to the site.
+
+- **Numbers** come from the same code as the site (`lib/recap/data.js` reuses
+  `lib/seasonOdds.js`), so the odds in the email match `/playoffs` exactly.
+- **Write-up** is by Claude (`lib/recap/narrative.js`), told to use only the data
+  it's given. If the API key is missing or the call fails, the email still goes
+  out with short factual sentences instead.
+- **Sending** is through [Resend](https://resend.com), one copy per recipient.
+- **Schedule:** `vercel.json` runs `/api/cron/weekly-recap` at 10:00 and 11:00
+  UTC on Tuesdays; the route only proceeds when it's 6 AM Eastern, so the send
+  time survives the DST change. Only regular-season weeks (1–14) are recapped.
+
+### Environment variables (Vercel → Settings → Environment Variables)
+
+| Variable | Purpose |
+| --- | --- |
+| `CRON_SECRET` | Required. Vercel sends it to the cron route; also unlocks manual runs and previews. |
+| `RESEND_API_KEY` | Required to send. |
+| `RECAP_FROM` | Sender, e.g. `BSFFL Recap <recap@yourdomain.com>`. Defaults to Resend's test sender, which only delivers to your own Resend account email. |
+| `RECAP_TEST_RECIPIENTS` | Comma-separated test list (e.g. just you). |
+| `RECAP_RECIPIENTS` | Comma-separated league list. |
+| `RECAP_LIVE` | `true` sends Tuesday's email to the league; anything else sends it to the test list. |
+| `ANTHROPIC_API_KEY` | Claude API key for the write-up. |
+| `SITE_URL` | Link in the email (default `https://bsffl.vercel.app`). |
+| `RECAP_MODEL` / `RECAP_EFFORT` | Optional overrides (default `claude-opus-5`, `medium`). |
+
+### Previewing and testing
+
+- `/api/recap-preview?key=<CRON_SECRET>` — the email in your browser (last
+  finished week). Add `&week=2`, `&ai=0` (skip Claude; free and instant),
+  `&format=text` or `&format=json`.
+- `/api/cron/weekly-recap?key=<CRON_SECRET>&force=1` — send now to the test list.
+  Add `&week=2`, `&dryRun=1` (build but don't send), or `&to=league`.
