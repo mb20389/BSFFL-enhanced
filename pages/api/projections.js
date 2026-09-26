@@ -1,15 +1,9 @@
 // pages/api/projections.js
 import NodeCache from "node-cache";
 import { resolveLeagueContextFromQuery } from "../../lib/leagues";
+import { getLeagueRosters, getWeekMatchups, getWeekProjections } from "../../lib/sleeper";
 
 const cache = new NodeCache({ stdTTL: 60 }); // cache 1 minute
-
-// Helper to fetch JSON safely
-async function fetchJson(url) {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`Fetch failed: ${url} (${r.status})`);
-  return r.json();
-}
 
 export default async function handler(req, res) {
   const config = resolveLeagueContextFromQuery(req.query);
@@ -25,43 +19,37 @@ export default async function handler(req, res) {
   if (cached) return res.status(200).json(cached);
 
   try {
-    // Step 1. Get rosters for league
-    const rosters = await fetchJson(
-      `https://api.sleeper.app/v1/league/${LEAGUE_ID}/rosters`
-    );
-
-    // Step 2. Projections belong to the league's own season, not whatever
-    // season the NFL is currently in (an archive page asks for a past year).
+    // Projections belong to the league's own season, not whatever season the
+    // NFL is currently in (an archive page asks for a past year).
     const season = config.season || new Date().getFullYear();
 
-    // Step 3. Get player projections for that week
-    const projData = await fetchJson(
-      `https://api.sleeper.app/v1/projections/nfl/${season}/${week}`
-    );
+    const [projections, matchups, rosters] = await Promise.all([
+      getWeekProjections(season, week),
+      getWeekMatchups(config, week),
+      getLeagueRosters(config),
+    ]);
 
-    // Build quick lookup: player_id → projected fantasy points
-    const projByPlayer = new Map();
-    for (const p of Array.isArray(projData) ? projData : []) {
-      if (!p?.player_id) continue;
-      // Use half_ppr points, fallback to ppts if available
-      const pts =
-        p.stats?.pts_half_ppr ??
-        p.stats?.pts_ppr ??
-        p.stats?.pts_standard ??
-        0;
-      projByPlayer.set(String(p.player_id), Number(pts));
+    // No projections for this week (yet): return nothing so the dashboard
+    // shows a dash rather than a column of zeros.
+    if (!projections) {
+      return res.status(200).json([]);
     }
 
-    // Step 4. Sum projections for each roster's starters
+    // Sum over that week's lineup. rosters[].starters is the *current*
+    // lineup, so it's only a fallback for a week with no matchups yet.
+    const startersByRoster = new Map(
+      matchups.map((m) => [Number(m.roster_id), Array.isArray(m.starters) ? m.starters : []])
+    );
     const results = (Array.isArray(rosters) ? rosters : []).map((r) => {
-      const starters = Array.isArray(r.starters) ? r.starters : [];
+      const starters =
+        startersByRoster.get(Number(r.roster_id)) ?? (Array.isArray(r.starters) ? r.starters : []);
       let projected_points = 0;
-      starters.forEach((pid) => {
-        projected_points += projByPlayer.get(String(pid)) || 0;
-      });
+      for (const pid of starters) {
+        projected_points += projections.get(String(pid))?.points || 0;
+      }
       return {
         roster_id: r.roster_id,
-        projected_points,
+        projected_points: Math.round(projected_points * 100) / 100,
       };
     });
 
